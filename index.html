@@ -367,7 +367,6 @@
   #login-msg { font-size: 13px; margin-top: 12px; min-height: 20px; }
   #login-msg.err { color: #c0392b; }
   #login-msg.ok { color: var(--green); }
-  /* ── Mobile ── */
   @media (max-width: 600px) {
     #topbar { padding: 10px 14px; }
     #app-sub { display: none; }
@@ -380,28 +379,47 @@
     #lib-actions { gap: 6px; }
     .lib-btn { font-size: 13px; padding: 8px 12px; }
 
+    /* Word card — compact bottom sheet */
     #reader-wrap { grid-template-columns: 1fr !important; }
     #word-card {
       position: fixed !important;
       bottom: 0; left: 0; right: 0;
       top: auto !important;
       height: auto !important;
-      max-height: 60vh;
+      max-height: 45vh;
       border-left: none !important;
-      border-top: 0.5px solid var(--border);
+      border-top: 1px solid var(--border);
       border-radius: 16px 16px 0 0;
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.1);
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
       z-index: 200;
       overflow-y: auto;
+      padding: 16px 16px 24px;
     }
     #word-card.open { display: block; }
 
+    /* Compact card layout on mobile */
+    #wc-char { font-size: 26px !important; }
+    #wc-pinyin { font-size: 12px !important; }
+    #wc-header { margin-bottom: 10px; }
+    .wc-section { margin-bottom: 10px; }
+    .wc-label { font-size: 10px; margin-bottom: 4px; }
+    #wc-meaning { font-size: 13px; padding: 8px 10px; }
+    #wc-radical { font-size: 12px; padding: 6px 10px; }
+    #wc-hsk { font-size: 11px; }
+    #wc-status-btns { flex-wrap: wrap; gap: 4px; }
+    .status-set-btn { font-size: 11px; padding: 4px 8px; }
+    #wc-user-meaning { font-size: 13px; padding: 7px 10px; }
+    #wc-related { display: none; } /* hide on mobile to save space */
+
+    /* Push text content up when card is open */
+    #text-content { padding-bottom: 50vh; }
+
     #reader-tabs { padding: 0 14px; overflow-x: auto; }
-    .rtab { padding: 10px 14px; font-size: 12px; white-space: nowrap; }
+    .rtab { padding: 10px 12px; font-size: 12px; white-space: nowrap; }
     #reader-tools { gap: 4px; }
     .tool-btn { font-size: 11px; padding: 3px 8px; }
 
-    #text-content { padding: 14px 14px 160px; }
+    #text-content { padding: 14px 14px 50vh; }
     .word-char { font-size: 22px !important; }
     .pinyin-label { font-size: 10px !important; }
     .word-span { margin: 0 2px !important; }
@@ -415,11 +433,7 @@
     #vocab-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .stat-val { font-size: 20px; }
 
-    #wc-char { font-size: 28px !important; }
-    #wc-related-list { max-height: 120px; overflow-y: auto; }
-
     #login-box { padding: 32px 20px; }
-
     .text-card { padding: 14px 16px; }
   }
 </style>
@@ -564,7 +578,10 @@
       </div>
     </div>
 
-    <!-- Word card -->
+<!-- Word card overlay (mobile) -->
+<div id="card-overlay" onclick="closeCard()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:199"></div>
+
+<!-- Word card -->
     <div id="word-card">
       <div id="wc-header">
         <div>
@@ -1426,9 +1443,17 @@ function updateWordCard() {
   const word = state.selectedWord;
   const card = document.getElementById('word-card');
   const wrap = document.getElementById('reader-wrap');
-  if (!word) { card.classList.remove('open'); wrap.classList.remove('with-card'); return; }
+  const overlay = document.getElementById('card-overlay');
+  const isMobile = window.innerWidth <= 600;
+  if (!word) {
+    card.classList.remove('open');
+    wrap.classList.remove('with-card');
+    if (overlay) overlay.style.display = 'none';
+    return;
+  }
   card.classList.add('open');
-  wrap.classList.add('with-card');
+  if (!isMobile) wrap.classList.add('with-card');
+  if (overlay && isMobile) overlay.style.display = 'block';
   const info = DICT[word];
   document.getElementById('wc-char').textContent = word;
   const entry = state.wordData[word];
@@ -1462,6 +1487,8 @@ function closeCard() {
   document.querySelectorAll('.word-span.selected').forEach(s => { s.classList.remove('selected'); applyWordStyle(s, s.dataset.word); });
   state.selectedWord = null;
   updateWordCard();
+  const overlay = document.getElementById('card-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function setStatus(s) {
