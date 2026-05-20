@@ -682,9 +682,26 @@ function onLoggedIn() {
 
 let DICT = {};
 let DICT_LOADED = false;
+let _dictKeys = []; // pre-sorted keys cache
 
 async function loadDictFromSupabase() {
   const loadingEl = document.getElementById('dict-loading');
+
+  // Try cache first
+  try {
+    const cached = localStorage.getItem('duli_dict');
+    const cachedTime = localStorage.getItem('duli_dict_time');
+    const ONE_DAY = 86400000;
+    if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < ONE_DAY) {
+      DICT = JSON.parse(cached);
+      _dictKeys = Object.keys(DICT).sort((a, b) => b.length - a.length);
+      DICT_LOADED = true;
+      if (loadingEl) loadingEl.style.display = 'none';
+      renderLibrary();
+      return;
+    }
+  } catch(e) {}
+
   if (loadingEl) loadingEl.style.display = 'block';
   try {
     let all = [];
@@ -709,7 +726,13 @@ async function loadDictFromSupabase() {
         hsk: row.hsk || 0,
       };
     });
+    _dictKeys = Object.keys(DICT).sort((a, b) => b.length - a.length);
     DICT_LOADED = true;
+    // Save to cache
+    try {
+      localStorage.setItem('duli_dict', JSON.stringify(DICT));
+      localStorage.setItem('duli_dict_time', Date.now().toString());
+    } catch(e) {}
     if (loadingEl) loadingEl.style.display = 'none';
     renderLibrary();
   } catch(e) {
@@ -920,16 +943,26 @@ let _wordSaveTimer = {};
 async function saveWordToSupabase(word) {
   const entry = state.wordData[word];
   if (!entry || !currentUser) return;
+  const body = {
+    language: 'zh', word, user_id: currentUser.id,
+    clicks: entry.clicks, last_click: entry.lastClick,
+    user_meaning: entry.userMeaning || null
+  };
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data`, {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({
-        language: 'zh', word, user_id: currentUser.id,
-        clicks: entry.clicks, last_click: entry.lastClick,
-        user_meaning: entry.userMeaning || null
-      })
-    });
+    // Try PATCH first (update existing)
+    const patch = await fetch(
+      `${SUPABASE_URL}/rest/v1/lang_word_data?user_id=eq.${currentUser.id}&language=eq.zh&word=eq.${encodeURIComponent(word)}`,
+      { method: 'PATCH', headers: { ...authHeaders(), 'Prefer': 'return=minimal' }, body: JSON.stringify(body) }
+    );
+    // If nothing was updated (404 or 0 rows), insert
+    const count = patch.headers.get('content-range');
+    if (!count || count === '*/0') {
+      await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(body)
+      });
+    }
   } catch(e) { console.error('saveWord error:', e); }
 }
 
@@ -1002,13 +1035,14 @@ function statusDot(s) {
 // ── Tokenizer ────────────────────────────────────────────────────────────────
 function tokenize(text) {
   const tokens = [];
-  const keys = Object.keys(DICT).sort((a,b) => b.length - a.length);
+  const keys = _dictKeys.length ? _dictKeys : Object.keys(DICT).sort((a,b) => b.length - a.length);
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
     if (/[\u4e00-\u9fff]/.test(ch)) {
       let matched = null;
       for (const k of keys) {
+        if (k.length > text.length - i) continue;
         if (text.slice(i, i+k.length) === k) { matched = k; break; }
       }
       if (matched) { tokens.push({type:'word', text:matched, info:DICT[matched]}); i += matched.length; }
