@@ -1242,7 +1242,7 @@ function loadFile(e) {
 }
 
 // ── Segmentation via Edge Function ───────────────────────────────────────────
-const _segCache = {}; // cache per text id
+const _segCache = {};
 
 async function segmentText(content) {
   try {
@@ -1255,18 +1255,33 @@ async function segmentText(content) {
     return data.words || [];
   } catch(e) {
     console.error('segment error:', e);
-    // fallback to local tokenizer
     return tokenize(content).map(t => t.text);
   }
 }
 
 function wordsToTokens(words) {
   return words.map(w => {
-    if (/[\u4e00-\u9fff]/.test(w)) {
+    if (/[\u4e00-\u9fff]/.test(w[0])) {
       return { type: 'word', text: w, info: DICT[w] || null };
     }
     return { type: 'punct', text: w };
   });
+}
+
+function splitWordsIntoSentences(words, sentences) {
+  const result = [];
+  let wordIdx = 0;
+  for (const sentence of sentences) {
+    const sentWords = [];
+    let charCount = 0;
+    while (wordIdx < words.length && charCount < sentence.length) {
+      sentWords.push(words[wordIdx]);
+      charCount += words[wordIdx].length;
+      wordIdx++;
+    }
+    result.push(sentWords);
+  }
+  return result;
 }
 
 // ── Open text ────────────────────────────────────────────────────────────────
@@ -1281,21 +1296,15 @@ async function openText(idx) {
   showView('reader');
   switchTab('read');
 
-  // Show loading state
   document.getElementById('text-file-title').textContent = text.title;
   document.getElementById('text-body').innerHTML = '<div style="padding:32px;color:var(--text3);font-size:14px">⏳ Сегментирую текст...</div>';
   updateWordCard();
   document.getElementById('no-audio').style.display = 'block';
   document.getElementById('has-audio').style.display = 'none';
 
-  // Segment each sentence via Edge Function
   if (!_segCache[text.id]) {
-    const allWords = [];
-    for (const sentence of state.sentences) {
-      const words = await segmentText(sentence);
-      allWords.push(words);
-    }
-    _segCache[text.id] = allWords;
+    const allWords = await segmentText(text.content);
+    _segCache[text.id] = splitWordsIntoSentences(allWords, state.sentences);
   }
 
   state.segmentedSentences = _segCache[text.id];
