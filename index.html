@@ -919,11 +919,11 @@ async function loadTextsFromSupabase() {
 let _wordSaveTimer = {};
 async function saveWordToSupabase(word) {
   const entry = state.wordData[word];
-  if (!entry) return;
+  if (!entry || !currentUser) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data`, {
       method: 'POST',
-      headers: { ...authHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      headers: { ...authHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
         language: 'zh', word, user_id: currentUser.id,
         clicks: entry.clicks, last_click: entry.lastClick,
