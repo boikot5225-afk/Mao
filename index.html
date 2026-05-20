@@ -367,6 +367,61 @@
   #login-msg { font-size: 13px; margin-top: 12px; min-height: 20px; }
   #login-msg.err { color: #c0392b; }
   #login-msg.ok { color: var(--green); }
+  /* ── Mobile ── */
+  @media (max-width: 600px) {
+    #topbar { padding: 10px 14px; }
+    #app-sub { display: none; }
+    #user-email { display: none; }
+    #topbar-right { gap: 4px; }
+    .nav-btn { font-size: 12px; padding: 5px 8px; }
+
+    #library { padding: 20px 14px; }
+    #lib-title { font-size: 22px; }
+    #lib-actions { gap: 6px; }
+    .lib-btn { font-size: 13px; padding: 8px 12px; }
+
+    #reader-wrap { grid-template-columns: 1fr !important; }
+    #word-card {
+      position: fixed !important;
+      bottom: 0; left: 0; right: 0;
+      top: auto !important;
+      height: auto !important;
+      max-height: 60vh;
+      border-left: none !important;
+      border-top: 0.5px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.1);
+      z-index: 200;
+      overflow-y: auto;
+    }
+    #word-card.open { display: block; }
+
+    #reader-tabs { padding: 0 14px; overflow-x: auto; }
+    .rtab { padding: 10px 14px; font-size: 12px; white-space: nowrap; }
+    #reader-tools { gap: 4px; }
+    .tool-btn { font-size: 11px; padding: 3px 8px; }
+
+    #text-content { padding: 14px 14px 160px; }
+    .word-char { font-size: 22px !important; }
+    .pinyin-label { font-size: 10px !important; }
+    .word-span { margin: 0 2px !important; }
+
+    #coverage-row { padding: 8px 14px 0; }
+
+    #patterns-content { padding: 14px; }
+    #audio-content { padding: 14px; }
+
+    #vocab-view > div, #gpatterns-view > div { padding: 20px 14px; }
+    #vocab-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-val { font-size: 20px; }
+
+    #wc-char { font-size: 28px !important; }
+    #wc-related-list { max-height: 120px; overflow-y: auto; }
+
+    #login-box { padding: 32px 20px; }
+
+    .text-card { padding: 14px 16px; }
+  }
 </style>
 </head>
 <body>
@@ -895,6 +950,7 @@ let state = {
   userPatterns: [],
   activeText: null,
   sentences: [],
+  segmentedSentences: null,
   sentenceTimes: [],
   activeSentence: -1,
   selectedWord: null,
@@ -1020,9 +1076,9 @@ function computeStatus(entry) {
   return 0;
 }
 function statusBg(s) {
-  if (s === 1) return 'rgba(239,159,123,0.3)';
-  if (s === 2) return 'rgba(250,199,117,0.4)';
-  if (s === 3) return 'rgba(93,202,165,0.25)';
+  if (s === 1) return 'rgba(239,159,123,0.25)';
+  if (s === 2) return 'rgba(250,199,117,0.35)';
+  if (s === 3) return 'transparent'; // known — no highlight
   return 'transparent';
 }
 function statusDot(s) {
@@ -1064,6 +1120,22 @@ function coverage(content) {
   if (!unique.length) return 0;
   const known = unique.filter(w => computeStatus(state.wordData[w]) >= 2).length;
   return Math.round(known / unique.length * 100);
+}
+
+function coverageFromSegmented() {
+  if (!state.segmentedSentences) return 0;
+  const all = state.segmentedSentences.flat().filter(w => DICT[w]);
+  const unique = [...new Set(all)];
+  if (!unique.length) return 0;
+  const known = unique.filter(w => computeStatus(state.wordData[w]) >= 2).length;
+  return Math.round(known / unique.length * 100);
+}
+
+function updateCoverage() {
+  if (!state.activeText) return;
+  const cov = state.segmentedSentences ? coverageFromSegmented() : coverage(state.activeText.content);
+  document.getElementById('cov-fill').style.width = cov + '%';
+  document.getElementById('cov-pct').textContent = cov + '%';
 }
 
 // ── Views ────────────────────────────────────────────────────────────────────
@@ -1169,22 +1241,66 @@ function loadFile(e) {
   e.target.value = '';
 }
 
+// ── Segmentation via Edge Function ───────────────────────────────────────────
+const _segCache = {}; // cache per text id
+
+async function segmentText(content) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/segment-text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ text: content })
+    });
+    const data = await res.json();
+    return data.words || [];
+  } catch(e) {
+    console.error('segment error:', e);
+    // fallback to local tokenizer
+    return tokenize(content).map(t => t.text);
+  }
+}
+
+function wordsToTokens(words) {
+  return words.map(w => {
+    if (/[\u4e00-\u9fff]/.test(w)) {
+      return { type: 'word', text: w, info: DICT[w] || null };
+    }
+    return { type: 'punct', text: w };
+  });
+}
+
 // ── Open text ────────────────────────────────────────────────────────────────
-function openText(idx) {
-  state.activeText = state.texts[idx];
-  state.sentences = splitSentences(state.activeText.content);
+async function openText(idx) {
+  const text = state.texts[idx];
+  state.activeText = text;
+  state.sentences = splitSentences(text.content);
   state.sentenceTimes = new Array(state.sentences.length).fill(null);
   state.activeSentence = -1;
   state.selectedWord = null;
   state.pendingSentenceIdx = 0;
   showView('reader');
   switchTab('read');
-  renderReader();
-  updateCoverage();
+
+  // Show loading state
+  document.getElementById('text-file-title').textContent = text.title;
+  document.getElementById('text-body').innerHTML = '<div style="padding:32px;color:var(--text3);font-size:14px">⏳ Сегментирую текст...</div>';
   updateWordCard();
-  // reset audio
   document.getElementById('no-audio').style.display = 'block';
   document.getElementById('has-audio').style.display = 'none';
+
+  // Segment each sentence via Edge Function
+  if (!_segCache[text.id]) {
+    const allWords = [];
+    for (const sentence of state.sentences) {
+      const words = await segmentText(sentence);
+      allWords.push(words);
+    }
+    _segCache[text.id] = allWords;
+  }
+
+  state.segmentedSentences = _segCache[text.id];
+  renderReader();
+  updateCoverage();
 }
 
 // ── Reader ───────────────────────────────────────────────────────────────────
@@ -1206,8 +1322,8 @@ function renderReader() {
     const span = document.createElement('span');
     span.className = 'sentence';
     span.dataset.si = si;
-    const tokens = tokenize(sentence);
-    tokens.forEach(tok => {
+    const rawTokens = state.segmentedSentences ? wordsToTokens(state.segmentedSentences[si] || []) : tokenize(sentence);
+    rawTokens.forEach(tok => {
       if (tok.type !== 'word') {
         const s = document.createElement('span');
         s.style.fontFamily = "'Noto Sans SC', sans-serif";
@@ -1220,11 +1336,12 @@ function renderReader() {
       ws.className = 'word-span';
       ws.dataset.word = tok.text;
       applyWordStyle(ws, tok.text);
+      const status = computeStatus(state.wordData[tok.text]);
       // pinyin
       const py = document.createElement('span');
       py.className = 'pinyin-label';
       py.textContent = tok.info ? tok.info.pinyin : '';
-      py.style.display = state.showPinyin && tok.info ? 'block' : 'none';
+      py.style.display = state.showPinyin && tok.info && status < 3 ? 'block' : 'none';
       // char
       const ch = document.createElement('span');
       ch.className = 'word-char';
@@ -1262,20 +1379,15 @@ function clickWord(word, el) {
   });
 }
 
-function updateCoverage() {
-  if (!state.activeText) return;
-  const cov = coverage(state.activeText.content);
-  document.getElementById('cov-fill').style.width = cov + '%';
-  document.getElementById('cov-pct').textContent = cov + '%';
-}
-
 function togglePinyin() {
   state.showPinyin = !state.showPinyin;
   document.getElementById('pinyin-btn').classList.toggle('on', state.showPinyin);
   document.querySelectorAll('.pinyin-label').forEach(el => {
     const ws = el.parentElement;
-    const hasInfo = !!DICT[ws.dataset.word];
-    el.style.display = state.showPinyin && hasInfo ? 'block' : 'none';
+    const word = ws.dataset.word;
+    const hasInfo = !!DICT[word];
+    const status = computeStatus(state.wordData[word]);
+    el.style.display = state.showPinyin && hasInfo && status < 3 ? 'block' : 'none';
   });
 }
 
