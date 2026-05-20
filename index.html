@@ -746,6 +746,7 @@ function onLoggedIn() {
   renderLibrary();
   Promise.all([
     loadDictFromSupabase(),
+    loadCharsFromSupabase(),
     loadTextsFromSupabase(),
     loadWordDataFromSupabase(),
     loadPatternsFromSupabase()
@@ -753,8 +754,37 @@ function onLoggedIn() {
 }
 
 let DICT = {};
+let CHARS = {}; // single character fallback
 let DICT_LOADED = false;
-let _dictKeys = []; // pre-sorted keys cache
+let _dictKeys = [];
+
+async function loadCharsFromSupabase() {
+  try {
+    const cached = localStorage.getItem('duli_chars');
+    const cachedTime = localStorage.getItem('duli_chars_time');
+    if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < 86400000) {
+      CHARS = JSON.parse(cached);
+      return;
+    }
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/lang_chars?select=char,pinyin,meaning_rus,meaning_eng,radical`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const rows = await res.json();
+    rows.forEach(r => {
+      CHARS[r.char] = {
+        pinyin: r.pinyin || '',
+        meaning: r.meaning_rus || r.meaning_eng || '',
+        radical: r.radical || '',
+        hsk: 0,
+      };
+    });
+    try {
+      localStorage.setItem('duli_chars', JSON.stringify(CHARS));
+      localStorage.setItem('duli_chars_time', Date.now().toString());
+    } catch(e) {}
+  } catch(e) { console.error('loadChars error:', e); }
+} // pre-sorted keys cache
 
 async function loadDictFromSupabase() {
   const loadingEl = document.getElementById('dict-loading');
@@ -1279,7 +1309,8 @@ async function segmentText(content) {
 function wordsToTokens(words) {
   return words.map(w => {
     if (/[\u4e00-\u9fff]/.test(w[0])) {
-      return { type: 'word', text: w, info: DICT[w] || null };
+      const info = DICT[w] || (w.length === 1 ? CHARS[w] : null);
+      return { type: 'word', text: w, info: info || null };
     }
     return { type: 'punct', text: w };
   });
@@ -1411,7 +1442,7 @@ function togglePinyin() {
   document.querySelectorAll('.pinyin-label').forEach(el => {
     const ws = el.parentElement;
     const word = ws.dataset.word;
-    const hasInfo = !!DICT[word];
+    const hasInfo = !!(DICT[word] || (word.length === 1 ? CHARS[word] : null));
     const status = computeStatus(state.wordData[word]);
     el.style.display = state.showPinyin && hasInfo && status < 3 ? 'block' : 'none';
   });
@@ -1454,7 +1485,7 @@ function updateWordCard() {
   card.classList.add('open');
   if (!isMobile) wrap.classList.add('with-card');
   if (overlay && isMobile) overlay.style.display = 'block';
-  const info = DICT[word];
+  const info = DICT[word] || (word.length === 1 ? CHARS[word] : null);
   document.getElementById('wc-char').textContent = word;
   const entry = state.wordData[word];
   const status = computeStatus(entry);
@@ -1705,8 +1736,12 @@ function renderGPatterns() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Clear chars cache to force reload with new data
+localStorage.removeItem('duli_chars');
+localStorage.removeItem('duli_chars_time');
 renderLibrary();
 loadDictFromSupabase();
+loadCharsFromSupabase();
 restoreSession().then(ok => {
   if (ok) onLoggedIn();
 });
