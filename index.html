@@ -340,9 +340,50 @@
   /* ── Global patterns view ── */
   #gpatterns-view { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
   #gpatterns-view h2 { font-size: 24px; font-weight: 500; margin-bottom: 24px; }
+  /* ── Login view ── */
+  #login-view {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  #login-view.active { display: flex; }
+  #login-box {
+    width: 100%; max-width: 380px; padding: 48px 40px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-lg);
+    margin: 24px;
+  }
+  #login-box h2 { font-size: 24px; font-weight: 500; margin-bottom: 6px; }
+  #login-box .sub { font-size: 14px; color: var(--text2); margin-bottom: 32px; }
+  #login-box input {
+    width: 100%; padding: 10px 14px; font-size: 14px; margin-bottom: 10px;
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    background: var(--bg); color: var(--text);
+  }
+  #login-btn {
+    width: 100%; padding: 12px; font-size: 15px;
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius); cursor: pointer; margin-top: 4px;
+  }
+  #login-msg { font-size: 13px; margin-top: 12px; min-height: 20px; }
+  #login-msg.err { color: #c0392b; }
+  #login-msg.ok { color: var(--green); }
 </style>
 </head>
 <body>
+
+<!-- Login -->
+<div id="login-view" class="active">
+  <div id="login-box">
+    <div style="font-family:'Noto Sans SC',sans-serif;font-size:32px;margin-bottom:16px">读力</div>
+    <h2>Войти</h2>
+    <div class="sub">Chinese Reader — введи email и пароль</div>
+    <input type="email" id="login-email" placeholder="Email" />
+    <input type="password" id="login-password" placeholder="Пароль" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button id="login-btn" onclick="doLogin()">Войти →</button>
+    <div id="login-msg"></div>
+    <div style="margin-top:16px;font-size:13px;color:var(--text3)">Нет аккаунта? <span style="color:var(--purple);cursor:pointer" onclick="doSignup()">Зарегистрироваться</span></div>
+  </div>
+</div>
 
 <!-- Topbar -->
 <div id="topbar">
@@ -352,8 +393,10 @@
     <span id="app-sub">Chinese Reader</span>
   </div>
   <div id="topbar-right">
+    <span id="user-email" style="font-size:12px;color:var(--text3);margin-right:4px"></span>
     <button class="nav-btn" id="vocab-nav-btn" onclick="showView('vocab')">词汇 Vocab</button>
     <button class="nav-btn" id="patterns-nav-btn" onclick="showView('gpatterns')">语法 Patterns</button>
+    <button class="nav-btn" onclick="doLogout()" style="color:#c0392b">Выйти</button>
   </div>
 </div>
 
@@ -533,6 +576,109 @@
 // ── Supabase ─────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://icudtjvnnoeibzxyyxfz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_U72E36q-R5ZXlWrbWor-Ug_t0gmHDfA';
+
+let currentUser = null;
+let accessToken = null;
+
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${accessToken || SUPABASE_KEY}`
+  };
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('login-msg');
+  const btn = document.getElementById('login-btn');
+  if (!email || !password) { msg.textContent = 'Введи email и пароль'; msg.className = 'err'; return; }
+  btn.disabled = true; btn.textContent = 'Входим...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      currentUser = data.user;
+      localStorage.setItem('duli_token', accessToken);
+      onLoggedIn();
+    } else {
+      msg.textContent = data.error_description || 'Ошибка входа';
+      msg.className = 'err';
+    }
+  } catch(e) { msg.textContent = 'Ошибка сети'; msg.className = 'err'; }
+  btn.disabled = false; btn.textContent = 'Войти →';
+}
+
+async function doSignup() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('login-msg');
+  if (!email || !password) { msg.textContent = 'Введи email и пароль'; msg.className = 'err'; return; }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.id || data.access_token) {
+      msg.textContent = 'Аккаунт создан! Теперь войди.';
+      msg.className = 'ok';
+    } else {
+      msg.textContent = data.msg || data.error_description || 'Ошибка регистрации';
+      msg.className = 'err';
+    }
+  } catch(e) { msg.textContent = 'Ошибка сети'; msg.className = 'err'; }
+}
+
+async function doLogout() {
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST', headers: authHeaders()
+    });
+  } catch(e) {}
+  accessToken = null; currentUser = null;
+  localStorage.removeItem('duli_token');
+  document.getElementById('login-view').classList.add('active');
+  document.getElementById('login-password').value = '';
+}
+
+async function restoreSession() {
+  const token = localStorage.getItem('duli_token');
+  if (!token) return false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.id) {
+      accessToken = token;
+      currentUser = data;
+      return true;
+    }
+  } catch(e) {}
+  localStorage.removeItem('duli_token');
+  return false;
+}
+
+function onLoggedIn() {
+  document.getElementById('login-view').classList.remove('active');
+  document.getElementById('user-email').textContent = currentUser?.email || '';
+  renderLibrary();
+  Promise.all([
+    loadDictFromSupabase(),
+    loadTextsFromSupabase(),
+    loadWordDataFromSupabase(),
+    loadPatternsFromSupabase()
+  ]);
+}
 
 let DICT = {};
 let DICT_LOADED = false;
@@ -737,17 +883,99 @@ let state = {
   currentView: 'library',
 };
 
-function save() {
-  try { localStorage.setItem('duli_v1', JSON.stringify({texts: state.texts, wordData: state.wordData, userPatterns: state.userPatterns})); } catch(e) {}
-}
-function load() {
+// ── Supabase texts ────────────────────────────────────────────────────────────
+async function saveTextToSupabase(text) {
   try {
-    const d = JSON.parse(localStorage.getItem('duli_v1') || '{}');
-    if (d.texts) state.texts = d.texts;
-    if (d.wordData) state.wordData = d.wordData;
-    if (d.userPatterns) state.userPatterns = d.userPatterns;
-  } catch(e) {}
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_texts`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify({ language: 'zh', title: text.title, content: text.content, user_id: currentUser.id })
+    });
+    const rows = await res.json();
+    return rows[0]?.id || null;
+  } catch(e) { console.error('saveText error:', e); return null; }
 }
+
+async function deleteTextFromSupabase(id) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/lang_texts?id=eq.${id}`, {
+      method: 'DELETE', headers: authHeaders()
+    });
+  } catch(e) { console.error('deleteText error:', e); }
+}
+
+async function loadTextsFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_texts?language=eq.zh&order=created_at.desc&select=id,title,content`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    state.texts = rows.map(r => ({ id: r.id, title: r.title, content: r.content }));
+    renderLibrary();
+  } catch(e) { console.error('loadTexts error:', e); }
+}
+
+// ── Supabase word data ────────────────────────────────────────────────────────
+let _wordSaveTimer = {};
+async function saveWordToSupabase(word) {
+  const entry = state.wordData[word];
+  if (!entry) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        language: 'zh', word, user_id: currentUser.id,
+        clicks: entry.clicks, last_click: entry.lastClick,
+        user_meaning: entry.userMeaning || null
+      })
+    });
+  } catch(e) { console.error('saveWord error:', e); }
+}
+
+function saveWordDebounced(word) {
+  clearTimeout(_wordSaveTimer[word]);
+  _wordSaveTimer[word] = setTimeout(() => saveWordToSupabase(word), 1000);
+}
+
+async function loadWordDataFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data?language=eq.zh&select=word,clicks,last_click,user_meaning`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    rows.forEach(r => {
+      state.wordData[r.word] = { clicks: r.clicks, lastClick: r.last_click, userMeaning: r.user_meaning };
+    });
+  } catch(e) { console.error('loadWordData error:', e); }
+}
+
+// ── Supabase user patterns ─────────────────────────────────────────────────────
+async function savePatternToSupabase(pattern) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_user_patterns`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify({ language: 'zh', text: pattern.text, note: pattern.note, user_id: currentUser.id })
+    });
+    const rows = await res.json();
+    return rows[0]?.id || null;
+  } catch(e) { console.error('savePattern error:', e); return null; }
+}
+
+async function loadPatternsFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_user_patterns?language=eq.zh&order=created_at.asc&select=id,text,note`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    state.userPatterns = rows.map(r => ({ id: r.id, text: r.text, note: r.note }));
+  } catch(e) { console.error('loadPatterns error:', e); }
+}
+
+// ── Local storage (fallback, no longer primary) ───────────────────────────────
+function save() { /* data now in Supabase */ }
+function load() { /* data now in Supabase */ }
 
 // ── Status ──────────────────────────────────────────────────────────────────
 function computeStatus(entry) {
@@ -840,7 +1068,10 @@ function renderLibrary() {
     card.innerHTML = `
       <div class="text-card-header">
         <div class="text-card-title">${t.title}</div>
-        <div class="text-card-pct" style="color:${color}">${cov}%</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="text-card-pct" style="color:${color}">${cov}%</div>
+          <button onclick="event.stopPropagation();deleteText(${idx})" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:2px 6px" title="Удалить">×</button>
+        </div>
       </div>
       <div class="text-card-preview">${t.content.slice(0,80).replace(/\n/g,' ')}…</div>
       <div class="text-card-bar-row">
@@ -850,6 +1081,14 @@ function renderLibrary() {
     card.onclick = () => openText(idx);
     tl.appendChild(card);
   });
+}
+
+async function deleteText(idx) {
+  if (!confirm('Удалить текст?')) return;
+  const t = state.texts[idx];
+  await deleteTextFromSupabase(t.id);
+  state.texts.splice(idx, 1);
+  renderLibrary();
 }
 
 function togglePaste() {
@@ -863,15 +1102,21 @@ function togglePaste() {
   fileBtn.classList.toggle('secondary', open);
 }
 
-function addPastedText() {
+async function addPastedText() {
   const content = document.getElementById('paste-content').value.trim();
   if (!content) return;
   const title = document.getElementById('paste-title-input').value.trim() || `Текст ${state.texts.length + 1}`;
-  state.texts.unshift({ id: Date.now(), title, content });
+  const btn = document.getElementById('paste-add-btn');
+  btn.disabled = true;
+  btn.textContent = 'Сохраняю...';
+  const id = await saveTextToSupabase({ title, content });
+  const newText = { id: id || Date.now(), title, content };
+  state.texts.unshift(newText);
   document.getElementById('paste-title-input').value = '';
   document.getElementById('paste-content').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Добавить →';
   togglePaste();
-  save();
   renderLibrary();
 }
 
@@ -879,9 +1124,12 @@ function loadFile(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
-    state.texts.unshift({ id: Date.now(), title: file.name.replace(/\.[^.]+$/, ''), content: ev.target.result });
-    save(); renderLibrary();
+  reader.onload = async ev => {
+    const title = file.name.replace(/\.[^.]+$/, '');
+    const content = ev.target.result;
+    const id = await saveTextToSupabase({ title, content });
+    state.texts.unshift({ id: id || Date.now(), title, content });
+    renderLibrary();
   };
   reader.readAsText(file, 'utf-8');
   e.target.value = '';
@@ -964,11 +1212,9 @@ function applyWordStyle(ws, word) {
 }
 
 function clickWord(word, el) {
-  // update clicks
   const prev = state.wordData[word] || { clicks: 0, lastClick: Date.now() };
   state.wordData[word] = { ...prev, clicks: prev.clicks + 1, lastClick: Date.now() };
-  save();
-  // deselect old
+  saveWordDebounced(word);
   document.querySelectorAll('.word-span.selected').forEach(s => {
     s.classList.remove('selected');
     applyWordStyle(s, s.dataset.word);
@@ -977,7 +1223,6 @@ function clickWord(word, el) {
   state.selectedWord = word;
   updateWordCard();
   updateCoverage();
-  // refresh all spans of this word
   document.querySelectorAll(`.word-span[data-word="${word}"]`).forEach(s => {
     if (!s.classList.contains('selected')) applyWordStyle(s, word);
   });
@@ -1070,7 +1315,7 @@ function setStatus(s) {
   const clickMap = [0, 1, 3, 10];
   const lastClickMap = [Date.now(), Date.now(), Date.now(), Date.now() - 8 * 86400000];
   state.wordData[word] = { ...(state.wordData[word] || {}), clicks: clickMap[s], lastClick: lastClickMap[s] };
-  save();
+  saveWordToSupabase(word);
   updateWordCard();
   document.querySelectorAll(`.word-span[data-word="${word}"]`).forEach(el => applyWordStyle(el, word));
 }
@@ -1079,14 +1324,14 @@ function saveUserMeaning() {
   const word = state.selectedWord;
   if (!word) return;
   state.wordData[word] = { ...(state.wordData[word] || {}), userMeaning: document.getElementById('wc-user-meaning').value };
-  save();
+  saveWordToSupabase(word);
 }
 
 function clickWordByName(word) {
   const prev = state.wordData[word] || { clicks: 0, lastClick: Date.now() };
   state.wordData[word] = { ...prev, clicks: prev.clicks + 1, lastClick: Date.now() };
   state.selectedWord = word;
-  save();
+  saveWordDebounced(word);
   updateWordCard();
 }
 
@@ -1119,14 +1364,14 @@ function renderPatterns() {
     </div>`).join('');
 }
 
-function savePattern() {
+async function savePattern() {
   const t = document.getElementById('pat-text-input').value.trim();
   const n = document.getElementById('pat-note-input').value.trim();
   if (!t) return;
-  state.userPatterns.push({ text: t, note: n });
+  const id = await savePatternToSupabase({ text: t, note: n });
+  state.userPatterns.push({ id, text: t, note: n });
   document.getElementById('pat-text-input').value = '';
   document.getElementById('pat-note-input').value = '';
-  save();
   renderPatterns();
   document.querySelector('[data-tab="patterns"]').textContent = `Паттерны (${getFoundPatterns().length + state.userPatterns.length})`;
 }
@@ -1278,9 +1523,11 @@ function renderGPatterns() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-load();
 renderLibrary();
 loadDictFromSupabase();
+restoreSession().then(ok => {
+  if (ok) onLoggedIn();
+});
 </script>
 </body>
 </html>
