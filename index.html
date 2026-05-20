@@ -386,33 +386,43 @@
       bottom: 0; left: 0; right: 0;
       top: auto !important;
       height: auto !important;
-      max-height: 45vh;
+      max-height: 55vh;
       border-left: none !important;
       border-top: 1px solid var(--border);
       border-radius: 16px 16px 0 0;
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
-      z-index: 200;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+      z-index: 300;
       overflow-y: auto;
-      padding: 16px 16px 24px;
+      padding: 20px 16px 32px;
+      background: var(--bg);
     }
     #word-card.open { display: block; }
 
+    /* Dark overlay behind card */
+    #card-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 299;
+    }
+
     /* Compact card layout on mobile */
-    #wc-char { font-size: 26px !important; }
-    #wc-pinyin { font-size: 12px !important; }
-    #wc-header { margin-bottom: 10px; }
+    #wc-char { font-size: 28px !important; }
+    #wc-pinyin { font-size: 13px !important; }
+    #wc-header { margin-bottom: 12px; }
     .wc-section { margin-bottom: 10px; }
     .wc-label { font-size: 10px; margin-bottom: 4px; }
-    #wc-meaning { font-size: 13px; padding: 8px 10px; }
+    #wc-meaning { font-size: 14px; padding: 8px 10px; }
     #wc-radical { font-size: 12px; padding: 6px 10px; }
     #wc-hsk { font-size: 11px; }
     #wc-status-btns { flex-wrap: wrap; gap: 4px; }
-    .status-set-btn { font-size: 11px; padding: 4px 8px; }
+    .status-set-btn { font-size: 12px; padding: 6px 10px; }
     #wc-user-meaning { font-size: 13px; padding: 7px 10px; }
-    #wc-related { display: none; } /* hide on mobile to save space */
+    #wc-related { display: none; }
 
     /* Push text content up when card is open */
-    #text-content { padding-bottom: 50vh; }
+    #text-content { padding: 14px 14px 60vh; }
 
     #reader-tabs { padding: 0 14px; overflow-x: auto; }
     .rtab { padding: 10px 12px; font-size: 12px; white-space: nowrap; }
@@ -512,6 +522,7 @@
         <div id="reader-tools">
           <button class="tool-btn on" id="pinyin-btn" onclick="togglePinyin()">拼音</button>
           <button class="tool-btn" id="gap-btn" onclick="toggleGap()">___</button>
+          <button class="tool-btn" onclick="speakSentence()" title="Озвучить предложение">🔊</button>
         </div>
       </div>
 
@@ -588,7 +599,10 @@
           <div id="wc-char"></div>
           <div id="wc-pinyin"></div>
         </div>
-        <button id="wc-close" onclick="closeCard()">×</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="wc-speak" onclick="speakWord()" style="background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:16px;cursor:pointer;color:var(--text2)" title="Озвучить">🔊</button>
+          <button id="wc-close" onclick="closeCard()">×</button>
+        </div>
       </div>
       <div class="wc-section">
         <div class="wc-label">ЗНАЧЕНИЕ</div>
@@ -1109,9 +1123,35 @@ async function loadPatternsFromSupabase() {
   } catch(e) { console.error('loadPatterns error:', e); }
 }
 
-// ── Local storage (fallback, no longer primary) ───────────────────────────────
-function save() { /* data now in Supabase */ }
-function load() { /* data now in Supabase */ }
+// ── Speech ────────────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'zh-CN';
+  utt.rate = 0.9;
+  // Try to find a Chinese voice
+  const voices = window.speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+  if (zhVoice) utt.voice = zhVoice;
+  window.speechSynthesis.speak(utt);
+}
+
+function speakWord() {
+  if (state.selectedWord) speak(state.selectedWord);
+}
+
+function speakSentence() {
+  // Speak currently highlighted sentence or first one
+  const idx = state.activeSentence >= 0 ? state.activeSentence : 0;
+  if (state.sentences[idx]) speak(state.sentences[idx]);
+}
+
+// Load voices on init (needed for some browsers)
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
 
 // ── Status ──────────────────────────────────────────────────────────────────
 function computeStatus(entry) {
@@ -1484,7 +1524,7 @@ function updateWordCard() {
   }
   card.classList.add('open');
   if (!isMobile) wrap.classList.add('with-card');
-  if (overlay && isMobile) overlay.style.display = 'block';
+  if (overlay) overlay.style.display = isMobile ? 'block' : 'none';
   const info = DICT[word] || (word.length === 1 ? CHARS[word] : null);
   document.getElementById('wc-char').textContent = word;
   const entry = state.wordData[word];
@@ -1530,7 +1570,17 @@ function setStatus(s) {
   state.wordData[word] = { ...(state.wordData[word] || {}), clicks: clickMap[s], lastClick: lastClickMap[s] };
   saveWordToSupabase(word);
   updateWordCard();
-  document.querySelectorAll(`.word-span[data-word="${word}"]`).forEach(el => applyWordStyle(el, word));
+  // Refresh all spans of this word
+  document.querySelectorAll(`.word-span[data-word="${CSS.escape(word)}"]`).forEach(el => {
+    applyWordStyle(el, word);
+    // Update pinyin visibility
+    const py = el.querySelector('.pinyin-label');
+    if (py) {
+      const hasInfo = !!(DICT[word] || (word.length === 1 ? CHARS[word] : null));
+      const newStatus = computeStatus(state.wordData[word]);
+      py.style.display = state.showPinyin && hasInfo && newStatus < 3 ? 'block' : 'none';
+    }
+  });
 }
 
 function saveUserMeaning() {
