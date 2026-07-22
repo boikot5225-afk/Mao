@@ -183,6 +183,7 @@
       <button class="filter-btn" data-filter="new_requests">Новые заявки</button>
       <button class="filter-btn" data-filter="unpaid">Не оплачено</button>
       <button class="filter-btn" data-filter="urgent">Горящие</button>
+      <button class="filter-btn" data-filter="in_progress">В работе</button>
       <button class="filter-btn" data-filter="ready">Готово к выдаче</button>
     </div>
   </div>
@@ -447,6 +448,7 @@
       if (filter === 'urgent' && !isUrgentOrOverdue(o)) return false;
       if (filter === 'new_requests' && o.reviewed) return false;
       if (filter === 'ready' && o.status !== 'ready') return false;
+      if (filter === 'in_progress' && o.status !== 'in_progress') return false;
       return true;
     });
 
