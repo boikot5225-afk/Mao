@@ -269,9 +269,12 @@
     return Math.round((d - today) / 86400000);
   }
 
-  function deadlineBadge(deadline) {
+  function deadlineBadge(deadline, status) {
     var dl = daysLeft(deadline);
     if (dl === null) return null;
+    if (status !== 'in_progress') {
+      return { text: 'До ' + formatDate(deadline), cls: 'deadline-ok', dl: dl };
+    }
     var text, cls;
     if (dl < 0) { text = 'Просрочено на ' + Math.abs(dl) + ' дн.'; cls = 'deadline-overdue'; }
     else if (dl === 0) { text = 'Срок сегодня'; cls = 'deadline-urgent'; }
@@ -286,6 +289,7 @@
   }
 
   function isUrgentOrOverdue(order) {
+    if (order.status !== 'in_progress') return false;
     var dl = daysLeft(order.deadline);
     return dl !== null && dl <= 2;
   }
@@ -460,7 +464,7 @@
     }
 
     visible.forEach(function(o) {
-      var badge = deadlineBadge(o.deadline);
+      var badge = deadlineBadge(o.deadline, o.status);
       var cardCls = 'order-card';
       if (badge) {
         if (badge.cls === 'deadline-overdue') cardCls += ' overdue';
