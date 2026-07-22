@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>读力 — Chinese Reader</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;500&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f4f0;
+    --bg3: #efede8;
+    --text: #1a1a1a;
+    --text2: #666;
+    --text3: #999;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.2);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --purple: #534AB7;
+    --purple-bg: #EEEDFE;
+    --purple-border: #AFA9EC;
+    --green: #1D9E75;
+    --amber: #BA7517;
+    --red-soft: #F09595;
+    --amber-soft: #FAC775;
+    --green-soft: #5DCAA5;
+  }
+
+  body {
+    font-family: 'Noto Serif', Georgia, serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  button { font-family: 'Noto Serif', serif; cursor: pointer; }
+  input, textarea { font-family: 'Noto Serif', serif; }
+
+  /* ── Topbar ── */
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 0.5px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 100;
+  }
+  #topbar-left { display: flex; align-items: center; gap: 12px; }
+  #back-btn {
+    background: none; border: none; font-size: 20px;
+    color: var(--text2); padding: 2px 8px; display: none;
+  }
+  #app-title { font-size: 18px; font-weight: 500; letter-spacing: 0.03em; }
+  #app-sub { font-size: 12px; color: var(--text3); letter-spacing: 0.08em; }
+  #topbar-right { display: flex; gap: 8px; }
+  .nav-btn {
+    font-size: 13px; padding: 6px 14px;
+    background: none; border: 0.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text2);
+  }
+  .nav-btn:hover { background: var(--bg2); }
+
+  /* ── Views ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── Library ── */
+  #library { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+  #lib-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
+  #lib-title { font-size: 28px; font-weight: 500; margin-bottom: 6px; }
+  #lib-sub { font-size: 14px; color: var(--text2); }
+  #lib-actions { display: flex; gap: 8px; }
+  .lib-btn {
+    font-size: 14px; padding: 10px 20px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+  }
+  #paste-btn { background: none; color: var(--text); }
+  #paste-btn.open { background: var(--text); color: var(--bg); }
+  #file-btn { background: var(--text); color: var(--bg); border-color: var(--text); }
+  #file-btn.secondary { background: none; color: var(--text); }
+
+  #paste-form {
+    background: var(--bg2); border-radius: var(--radius-lg);
+    padding: 20px; margin-bottom: 24px; display: none;
+  }
+  #paste-form.open { display: block; }
+  #paste-title-input, #paste-content {
+    width: 100%; padding: 9px 12px; font-size: 14px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text); margin-bottom: 10px;
+  }
+  #paste-content {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 15px; resize: vertical; line-height: 1.7;
+    height: 140px; margin-bottom: 12px;
+  }
+  #paste-add-btn {
+    font-size: 14px; padding: 9px 22px;
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius);
+  }
+
+  #empty-state { text-align: center; padding: 80px 0; color: var(--text3); }
+  #empty-state .big { font-family: 'Noto Sans SC', sans-serif; font-size: 48px; margin-bottom: 16px; }
+
+  .text-card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    margin-bottom: 12px; cursor: pointer; transition: border-color 0.15s;
+  }
+  .text-card:hover { border-color: var(--border2); }
+  .text-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .text-card-title { font-size: 16px; font-weight: 500; margin-bottom: 8px; }
+  .text-card-pct { font-size: 22px; font-weight: 500; }
+  .text-card-preview { font-size: 13px; color: var(--text2); margin-bottom: 10px; }
+  .text-card-bar-row { display: flex; gap: 16px; align-items: center; }
+  .bar-track { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .text-card-new { font-size: 12px; color: var(--text3); }
+
+  /* ── Reader layout ── */
+  #reader-wrap {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 57px);
+  }
+  #reader-wrap.with-card { grid-template-columns: 1fr 300px; }
+
+  /* ── Reader tabs ── */
+  #reader-tabs {
+    display: flex; border-bottom: 0.5px solid var(--border);
+    padding: 0 24px; position: sticky; top: 57px;
+    background: var(--bg); z-index: 90; align-items: center;
+  }
+  .rtab {
+    padding: 12px 20px; font-size: 13px;
+    background: none; border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text2); cursor: pointer; font-weight: 400;
+  }
+  .rtab.active { color: var(--purple); border-bottom-color: var(--purple); font-weight: 500; }
+  #reader-tools { margin-left: auto; display: flex; gap: 8px; align-items: center; padding-right: 4px; }
+  .tool-btn {
+    font-size: 12px; padding: 4px 10px;
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+    background: none; color: var(--text2);
+  }
+  .tool-btn.on { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+
+  /* ── Coverage bar ── */
+  #coverage-row {
+    padding: 12px 24px 0;
+    display: flex; align-items: center; gap: 12px;
+  }
+  #cov-label { font-size: 12px; color: var(--text3); }
+  #cov-track { flex: 1; height: 3px; background: var(--bg2); border-radius: 2px; overflow: hidden; max-width: 200px; }
+  #cov-fill { height: 100%; background: var(--green-soft); border-radius: 2px; transition: width 0.3s; }
+  #cov-pct { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+  /* ── Text content ── */
+  #text-content { padding: 24px 32px; max-width: 680px; padding-bottom: 120px; }
+  #text-file-title { font-size: 13px; font-weight: 500; color: var(--text3); margin-bottom: 20px; letter-spacing: 0.04em; }
+
+  .sentence { display: inline; border-radius: 4px; transition: background 0.2s; }
+  .sentence.synced { cursor: pointer; }
+  .sentence.highlight { background: rgba(83,74,183,0.07); }
+
+  .word-span {
+    display: inline-block; cursor: pointer; margin: 0 1px;
+    padding: 1px 2px; border-radius: 3px;
+    transition: background 0.15s; vertical-align: bottom;
+    position: relative;
+  }
+  .word-span:hover { background: rgba(83,74,183,0.1) !important; }
+  .word-span.selected { background: rgba(83,74,183,0.18) !important; }
+
+  .pinyin-label {
+    display: block; font-size: 11px; color: var(--text3);
+    text-align: center; line-height: 1.2; margin-bottom: 1px;
+    font-family: 'Noto Serif', serif;
+  }
+  .word-span.selected .pinyin-label { color: var(--purple); }
+
+  .word-char {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 19px; line-height: 1.3;
+    user-select: none;
+  }
+
+  .status-dot {
+    display: block; width: 4px; height: 4px;
+    border-radius: 2px; margin: 2px auto 0;
+  }
+
+  /* ── Word card panel ── */
+  #word-card {
+    border-left: 0.5px solid var(--border);
+    padding: 24px 20px;
+    position: sticky; top: 57px;
+    height: calc(100vh - 57px);
+    overflow-y: auto; display: none;
+  }
+  #word-card.open { display: block; }
+  #wc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  #wc-char { font-family: 'Noto Sans SC', sans-serif; font-size: 36px; font-weight: 500; line-height: 1.2; }
+  #wc-pinyin { font-size: 13px; color: var(--purple); margin-top: 4px; }
+  #wc-close { background: none; border: none; font-size: 20px; color: var(--text3); padding: 0 4px; }
+  .wc-section { margin-bottom: 16px; }
+  .wc-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; letter-spacing: 0.06em; }
+  #wc-meaning {
+    font-size: 14px; padding: 10px 12px;
+    background: var(--bg2); border-radius: var(--radius);
+  }
+  #wc-radical {
+    font-size: 13px; color: var(--text2); padding: 8px 12px;
+    background: var(--bg2); border-radius: var(--radius);
+  }
+  #wc-hsk { font-size: 12px; background: var(--purple-bg); color: var(--purple); padding: 3px 10px; border-radius: 4px; display: inline-block; }
+  #wc-status-btns { display: flex; gap: 6px; }
+  .status-set-btn {
+    font-size: 11px; padding: 4px 8px;
+    border-radius: var(--radius); border: 0.5px solid var(--border);
+    background: none; color: var(--text2);
+  }
+  #wc-user-meaning {
+    width: 100%; padding: 8px 10px; font-size: 13px;
+    border-radius: var(--radius); border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+  }
+  #wc-related { margin-top: 16px; }
+  .related-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; border-bottom: 0.5px solid var(--border);
+    cursor: pointer;
+  }
+  .related-word { font-family: 'Noto Sans SC', sans-serif; font-size: 15px; }
+  .related-meaning { font-size: 12px; color: var(--text2); }
+  #wc-not-found { font-size: 13px; color: var(--text3); }
+
+  /* ── Patterns tab ── */
+  #patterns-content { padding: 24px 32px; max-width: 680px; }
+  #patterns-content .tab-sub { font-size: 14px; color: var(--text2); margin-bottom: 20px; }
+  .pattern-card {
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+  }
+  .pattern-card.user { border-color: #EF9F27; }
+  .pattern-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .pattern-name { font-family: 'Noto Sans SC', sans-serif; font-size: 16px; font-weight: 500; }
+  .hsk-badge { font-size: 11px; background: var(--purple-bg); color: var(--purple); padding: 2px 8px; border-radius: 4px; }
+  .user-badge { font-size: 11px; background: #FAEEDA; color: #633806; padding: 2px 8px; border-radius: 4px; }
+  .pattern-exp { font-size: 13px; color: var(--text2); }
+  #add-pattern-box {
+    margin-top: 20px; padding: 16px;
+    background: var(--bg2); border-radius: var(--radius);
+  }
+  #add-pattern-box .box-title { font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+  #pat-text-input, #pat-note-input {
+    width: 100%; margin-bottom: 8px; padding: 8px 12px;
+    font-size: 14px; border-radius: var(--radius);
+    border: 0.5px solid var(--border2); background: var(--bg); color: var(--text);
+  }
+  #pat-text-input { font-family: 'Noto Sans SC', sans-serif; }
+  #pat-note-input { margin-bottom: 10px; }
+  #pat-save-btn {
+    font-size: 13px; padding: 7px 16px;
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius);
+  }
+
+  /* ── Audio tab ── */
+  #audio-content { padding: 24px 32px; max-width: 680px; }
+  #upload-audio-btn {
+    font-size: 14px; padding: 10px 20px;
+    background: none; border: 0.5px solid var(--border2);
+    border-radius: var(--radius); color: var(--text); margin-bottom: 16px;
+  }
+  #audio-controls { margin-bottom: 20px; }
+  #audio-controls .sec-title { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+  #audio-btns { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #play-pause-btn {
+    font-size: 13px; padding: 8px 18px;
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius);
+  }
+  .rate-btn {
+    font-size: 12px; padding: 6px 12px;
+    background: none; border: 0.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text2);
+  }
+  .rate-btn.on { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+  #shadow-btn {
+    font-size: 12px; padding: 6px 12px;
+    background: none; border: 0.5px solid var(--border);
+    border-radius: var(--radius); color: var(--text2);
+  }
+  #shadow-btn.on { background: #FAEEDA; color: #633806; border-color: #EF9F27; }
+  #sync-section { margin-bottom: 16px; }
+  #sync-section .sec-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  #sync-info { font-size: 13px; color: var(--text2); margin-bottom: 10px; }
+  #sync-btns { display: flex; gap: 10px; align-items: center; }
+  #mark-btn, #reset-sync-btn {
+    font-size: 13px; padding: 8px 18px;
+    border-radius: var(--radius);
+  }
+  #mark-btn { background: none; border: 0.5px solid var(--border2); color: var(--text); }
+  #reset-sync-btn { background: none; border: 0.5px solid var(--border); color: var(--text2); font-size: 12px; padding: 6px 12px; }
+  #sentence-list { max-height: 300px; overflow-y: auto; }
+  .sent-row {
+    padding: 8px 12px; margin-bottom: 4px;
+    border-radius: var(--radius); background: var(--bg2);
+    display: flex; gap: 10px; align-items: center;
+  }
+  .sent-row.active { background: rgba(83,74,183,0.08); }
+  .sent-row.synced { cursor: pointer; }
+  .sent-time { font-size: 11px; color: var(--text3); min-width: 36px; }
+  .sent-time.marked { color: var(--green); }
+  .sent-preview { font-family: 'Noto Sans SC', sans-serif; font-size: 14px; color: var(--text); }
+  .sent-row.active .sent-preview { color: var(--purple); }
+
+  /* ── Vocab view ── */
+  #vocab-view { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+  #vocab-view h2 { font-size: 24px; font-weight: 500; margin-bottom: 8px; }
+  #vocab-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
+  .stat-card { background: var(--bg2); border-radius: var(--radius); padding: 14px 16px; }
+  .stat-val { font-size: 24px; font-weight: 500; }
+  .stat-lbl { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  #vocab-list .vrow {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .vrow-left { display: flex; gap: 16px; align-items: baseline; }
+  .vrow-word { font-family: 'Noto Sans SC', sans-serif; font-size: 20px; }
+  .vrow-pinyin { font-size: 12px; color: var(--text3); }
+  .vrow-right { display: flex; gap: 10px; align-items: center; }
+  .vrow-meaning { font-size: 12px; color: var(--text2); }
+  .vrow-dot { width: 8px; height: 8px; border-radius: 4px; display: inline-block; }
+
+  /* ── Global patterns view ── */
+  #gpatterns-view { max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+  #gpatterns-view h2 { font-size: 24px; font-weight: 500; margin-bottom: 24px; }
+  /* ── Login view ── */
+  #login-view {
+    display: none; position: fixed; inset: 0;
+    background: var(--bg); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  #login-view.active { display: flex; }
+  #login-box {
+    width: 100%; max-width: 380px; padding: 48px 40px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-lg);
+    margin: 24px;
+  }
+  #login-box h2 { font-size: 24px; font-weight: 500; margin-bottom: 6px; }
+  #login-box .sub { font-size: 14px; color: var(--text2); margin-bottom: 32px; }
+  #login-box input {
+    width: 100%; padding: 10px 14px; font-size: 14px; margin-bottom: 10px;
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    background: var(--bg); color: var(--text);
+  }
+  #login-btn {
+    width: 100%; padding: 12px; font-size: 15px;
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius); cursor: pointer; margin-top: 4px;
+  }
+  #login-msg { font-size: 13px; margin-top: 12px; min-height: 20px; }
+  #login-msg.err { color: #c0392b; }
+  #login-msg.ok { color: var(--green); }
+  @media (max-width: 600px) {
+    #topbar { padding: 10px 14px; }
+    #app-sub { display: none; }
+    #user-email { display: none; }
+    #topbar-right { gap: 4px; }
+    .nav-btn { font-size: 12px; padding: 5px 8px; }
+
+    #library { padding: 20px 14px; }
+    #lib-title { font-size: 22px; }
+    #lib-actions { gap: 6px; }
+    .lib-btn { font-size: 13px; padding: 8px 12px; }
+
+    /* Word card — compact bottom sheet */
+    #reader-wrap { grid-template-columns: 1fr !important; }
+    #word-card {
+      position: fixed !important;
+      bottom: 0; left: 0; right: 0;
+      top: auto !important;
+      height: auto !important;
+      max-height: 55vh;
+      border-left: none !important;
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+      z-index: 300;
+      overflow-y: auto;
+      padding: 20px 16px 32px;
+      background: var(--bg);
+    }
+    #word-card.open { display: block; }
+
+    /* Dark overlay behind card */
+    #card-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 299;
+    }
+
+    /* Compact card layout on mobile */
+    #wc-char { font-size: 28px !important; }
+    #wc-pinyin { font-size: 13px !important; }
+    #wc-header { margin-bottom: 12px; }
+    .wc-section { margin-bottom: 10px; }
+    .wc-label { font-size: 10px; margin-bottom: 4px; }
+    #wc-meaning { font-size: 14px; padding: 8px 10px; }
+    #wc-radical { font-size: 12px; padding: 6px 10px; }
+    #wc-hsk { font-size: 11px; }
+    #wc-status-btns { flex-wrap: wrap; gap: 4px; }
+    .status-set-btn { font-size: 12px; padding: 6px 10px; }
+    #wc-user-meaning { font-size: 13px; padding: 7px 10px; }
+    #wc-related { display: none; }
+
+    /* Push text content up when card is open */
+    #text-content { padding: 14px 14px 60vh; }
+
+    #reader-tabs { padding: 0 14px; overflow-x: auto; }
+    .rtab { padding: 10px 12px; font-size: 12px; white-space: nowrap; }
+    #reader-tools { gap: 4px; }
+    .tool-btn { font-size: 11px; padding: 3px 8px; }
+
+    #text-content { padding: 14px 14px 50vh; }
+    .word-char { font-size: 22px !important; }
+    .pinyin-label { font-size: 10px !important; }
+    .word-span { margin: 0 2px !important; }
+
+    #coverage-row { padding: 8px 14px 0; }
+
+    #patterns-content { padding: 14px; }
+    #audio-content { padding: 14px; }
+
+    #vocab-view > div, #gpatterns-view > div { padding: 20px 14px; }
+    #vocab-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-val { font-size: 20px; }
+
+    #login-box { padding: 32px 20px; }
+    .text-card { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-view" class="active">
+  <div id="login-box">
+    <div style="font-family:'Noto Sans SC',sans-serif;font-size:32px;margin-bottom:16px">读力</div>
+    <h2>Войти</h2>
+    <div class="sub">Chinese Reader — введи email и пароль</div>
+    <input type="email" id="login-email" placeholder="Email" />
+    <input type="password" id="login-password" placeholder="Пароль" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button id="login-btn" onclick="doLogin()">Войти →</button>
+    <div id="login-msg"></div>
+    <div style="margin-top:16px;font-size:13px;color:var(--text3)">Нет аккаунта? <span style="color:var(--purple);cursor:pointer" onclick="doSignup()">Зарегистрироваться</span></div>
+  </div>
+</div>
+
+<!-- Topbar -->
+<div id="topbar">
+  <div id="topbar-left">
+    <button id="back-btn" onclick="goLibrary()">←</button>
+    <span id="app-title">读力</span>
+    <span id="app-sub">Chinese Reader</span>
+  </div>
+  <div id="topbar-right">
+    <span id="user-email" style="font-size:12px;color:var(--text3);margin-right:4px"></span>
+    <button class="nav-btn" id="vocab-nav-btn" onclick="showView('vocab')">词汇 Vocab</button>
+    <button class="nav-btn" id="patterns-nav-btn" onclick="showView('gpatterns')">语法 Patterns</button>
+    <button class="nav-btn" onclick="doLogout()" style="color:#c0392b">Выйти</button>
+  </div>
+</div>
+
+<!-- Library -->
+<div id="library-view" class="view active">
+  <div id="library">
+    <div id="lib-header">
+      <div>
+        <div id="lib-title">Библиотека</div>
+        <div id="lib-sub">0 текстов · 0 знакомых слов</div>
+      </div>
+      <div id="lib-actions">
+        <button class="lib-btn" id="paste-btn" onclick="togglePaste()">+ Вставить</button>
+        <button class="lib-btn" id="file-btn" onclick="document.getElementById('file-input').click()">↑ Файл</button>
+        <input type="file" id="file-input" accept=".txt,.srt" style="display:none" onchange="loadFile(event)">
+      </div>
+    </div>
+
+    <div id="paste-form">
+      <input id="paste-title-input" placeholder="Название текста" />
+      <textarea id="paste-content" placeholder="Вставь китайский текст сюда..."></textarea>
+      <button id="paste-add-btn" onclick="addPastedText()">Добавить →</button>
+    </div>
+
+    <div id="empty-state">
+      <div class="big">阅读</div>
+      <div>Вставь или загрузи первый текст чтобы начать</div>
+    </div>
+    <div id="dict-loading" style="display:none;font-size:13px;color:var(--text3);margin-bottom:16px;padding:10px 14px;background:var(--bg2);border-radius:var(--radius)">
+      ⏳ Загружаю словарь из базы данных...
+    </div>
+    <div id="texts-list"></div>
+  </div>
+</div>
+
+<!-- Reader -->
+<div id="reader-view" class="view">
+  <div id="reader-wrap">
+    <div id="reader-left">
+      <div id="reader-tabs">
+        <button class="rtab active" data-tab="read" onclick="switchTab('read')">Читать</button>
+        <button class="rtab" data-tab="patterns" onclick="switchTab('patterns')">Паттерны</button>
+        <button class="rtab" data-tab="audio" onclick="switchTab('audio')">Аудио</button>
+        <div id="reader-tools">
+          <button class="tool-btn on" id="pinyin-btn" onclick="togglePinyin()">拼音</button>
+          <button class="tool-btn" id="gap-btn" onclick="toggleGap()">___</button>
+          <button class="tool-btn" onclick="speakSentence()" title="Озвучить предложение">🔊</button>
+        </div>
+      </div>
+
+      <div id="coverage-row">
+        <span id="cov-label">Покрытие текста</span>
+        <div id="cov-track"><div id="cov-fill" style="width:0%"></div></div>
+        <span id="cov-pct">0%</span>
+      </div>
+
+      <!-- Read tab -->
+      <div id="tab-read">
+        <div id="text-content">
+          <div id="text-file-title"></div>
+          <div id="text-body"></div>
+        </div>
+      </div>
+
+      <!-- Patterns tab -->
+      <div id="tab-patterns" style="display:none">
+        <div id="patterns-content">
+          <div class="tab-sub">Конструкции найденные в этом тексте</div>
+          <div id="found-patterns-list"></div>
+          <div id="user-patterns-in-reader"></div>
+          <div id="add-pattern-box">
+            <div class="box-title">Добавить свой паттерн</div>
+            <input id="pat-text-input" placeholder="Конструкция, напр. 只有…才…" />
+            <input id="pat-note-input" placeholder="Объяснение" />
+            <button id="pat-save-btn" onclick="savePattern()">Сохранить</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audio tab -->
+      <div id="tab-audio" style="display:none">
+        <div id="audio-content">
+          <div id="no-audio">
+            <div style="font-size:14px;color:var(--text2);margin-bottom:16px">Загрузи аудиофайл к этому тексту</div>
+            <button id="upload-audio-btn" onclick="document.getElementById('audio-input').click()">+ Загрузить MP3 / WAV</button>
+            <input type="file" id="audio-input" accept="audio/*" style="display:none" onchange="loadAudio(event)">
+          </div>
+          <div id="has-audio" style="display:none">
+            <audio id="audio-player"></audio>
+            <div id="audio-controls">
+              <div class="sec-title">Управление</div>
+              <div id="audio-btns">
+                <button id="play-pause-btn" onclick="togglePlay()">▶ Играть</button>
+                <button class="rate-btn" data-rate="0.5" onclick="setRate(0.5)">0.5x</button>
+                <button class="rate-btn on" data-rate="1" onclick="setRate(1)">1x</button>
+                <button class="rate-btn" data-rate="1.25" onclick="setRate(1.25)">1.25x</button>
+                <button id="shadow-btn" onclick="toggleShadow()">Теневое чтение</button>
+              </div>
+            </div>
+            <div id="sync-section">
+              <div class="sec-title">Синхронизация</div>
+              <div id="sync-info">Нажимай «Отметить» для каждого предложения</div>
+              <div id="sync-btns">
+                <button id="mark-btn" onclick="markTime()">● Отметить предложение <span id="pending-idx">1</span></button>
+                <button id="reset-sync-btn" onclick="resetSync()">Сбросить</button>
+              </div>
+            </div>
+            <div id="sentence-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<!-- Word card overlay (mobile) -->
+<div id="card-overlay" onclick="closeCard()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:199"></div>
+
+<!-- Word card -->
+    <div id="word-card">
+      <div id="wc-header">
+        <div>
+          <div id="wc-char"></div>
+          <div id="wc-pinyin"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="wc-speak" onclick="speakWord()" style="background:none;border:0.5px solid var(--border);border-radius:var(--radius);padding:5px 10px;font-size:16px;cursor:pointer;color:var(--text2)" title="Озвучить">🔊</button>
+          <button id="wc-close" onclick="closeCard()">×</button>
+        </div>
+      </div>
+      <div class="wc-section">
+        <div class="wc-label">ЗНАЧЕНИЕ</div>
+        <div id="wc-meaning"></div>
+      </div>
+      <div class="wc-section">
+        <div class="wc-label">СОСТАВ</div>
+        <div id="wc-radical"></div>
+      </div>
+      <div class="wc-section">
+        <div class="wc-label">УРОВЕНЬ</div>
+        <div id="wc-hsk"></div>
+      </div>
+      <div class="wc-section">
+        <div class="wc-label">СТАТУС</div>
+        <div id="wc-status-btns">
+          <button class="status-set-btn" onclick="setStatus(0)">Новое</button>
+          <button class="status-set-btn" onclick="setStatus(1)">Видел</button>
+          <button class="status-set-btn" onclick="setStatus(2)">Учу</button>
+          <button class="status-set-btn" onclick="setStatus(3)">Знаю</button>
+        </div>
+      </div>
+      <div class="wc-section">
+        <div class="wc-label">МОЙ ПЕРЕВОД</div>
+        <input id="wc-user-meaning" placeholder="Добавь свой перевод..." onblur="saveUserMeaning()">
+      </div>
+      <div id="wc-related">
+        <div class="wc-label">ПОХОЖИЕ СЛОВА (тот же ключ)</div>
+        <div id="wc-related-list"></div>
+      </div>
+      <div id="wc-not-found" style="display:none">Слово не найдено в базе</div>
+    </div>
+  </div>
+</div>
+
+<!-- Vocab -->
+<div id="vocab-view" class="view">
+  <div id="vocab-view-inner">
+    <div style="max-width:720px;margin:0 auto;padding:40px 24px">
+      <h2 style="font-size:24px;font-weight:500;margin-bottom:8px">Личный словарь</h2>
+      <div id="vocab-stats"></div>
+      <div id="vocab-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Global patterns -->
+<div id="gpatterns-view" class="view">
+  <div style="max-width:720px;margin:0 auto;padding:40px 24px">
+    <h2 style="font-size:24px;font-weight:500;margin-bottom:24px">Паттерны HSK 3–6</h2>
+    <div id="gpatterns-list"></div>
+    <div id="gpatterns-user"></div>
+  </div>
+</div>
+
+<script>
+// ── Supabase ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://icudtjvnnoeibzxyyxfz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_U72E36q-R5ZXlWrbWor-Ug_t0gmHDfA';
+
+let currentUser = null;
+let accessToken = null;
+
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${accessToken || SUPABASE_KEY}`
+  };
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('login-msg');
+  const btn = document.getElementById('login-btn');
+  if (!email || !password) { msg.textContent = 'Введи email и пароль'; msg.className = 'err'; return; }
+  btn.disabled = true; btn.textContent = 'Входим...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      currentUser = data.user;
+      localStorage.setItem('duli_token', accessToken);
+      onLoggedIn();
+    } else {
+      msg.textContent = data.error_description || 'Ошибка входа';
+      msg.className = 'err';
+    }
+  } catch(e) { msg.textContent = 'Ошибка сети'; msg.className = 'err'; }
+  btn.disabled = false; btn.textContent = 'Войти →';
+}
+
+async function doSignup() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg = document.getElementById('login-msg');
+  if (!email || !password) { msg.textContent = 'Введи email и пароль'; msg.className = 'err'; return; }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.id || data.access_token) {
+      msg.textContent = 'Аккаунт создан! Теперь войди.';
+      msg.className = 'ok';
+    } else {
+      msg.textContent = data.msg || data.error_description || 'Ошибка регистрации';
+      msg.className = 'err';
+    }
+  } catch(e) { msg.textContent = 'Ошибка сети'; msg.className = 'err'; }
+}
+
+async function doLogout() {
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST', headers: authHeaders()
+    });
+  } catch(e) {}
+  accessToken = null; currentUser = null;
+  localStorage.removeItem('duli_token');
+  document.getElementById('login-view').classList.add('active');
+  document.getElementById('login-password').value = '';
+}
+
+async function restoreSession() {
+  const token = localStorage.getItem('duli_token');
+  if (!token) return false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.id) {
+      accessToken = token;
+      currentUser = data;
+      return true;
+    }
+  } catch(e) {}
+  localStorage.removeItem('duli_token');
+  return false;
+}
+
+function onLoggedIn() {
+  document.getElementById('login-view').classList.remove('active');
+  document.getElementById('user-email').textContent = currentUser?.email || '';
+  renderLibrary();
+  Promise.all([
+    loadDictFromSupabase(),
+    loadCharsFromSupabase(),
+    loadTextsFromSupabase(),
+    loadWordDataFromSupabase(),
+    loadPatternsFromSupabase()
+  ]);
+}
+
+let DICT = {};
+let CHARS = {}; // single character fallback
+let DICT_LOADED = false;
+let _dictKeys = [];
+
+async function loadCharsFromSupabase() {
+  try {
+    const cached = localStorage.getItem('duli_chars');
+    const cachedTime = localStorage.getItem('duli_chars_time');
+    if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < 86400000) {
+      CHARS = JSON.parse(cached);
+      return;
+    }
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/lang_chars?select=char,pinyin,meaning_rus,meaning_eng,radical`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const rows = await res.json();
+    rows.forEach(r => {
+      CHARS[r.char] = {
+        pinyin: r.pinyin || '',
+        meaning: r.meaning_rus || r.meaning_eng || '',
+        radical: r.radical || '',
+        hsk: 0,
+      };
+    });
+    try {
+      localStorage.setItem('duli_chars', JSON.stringify(CHARS));
+      localStorage.setItem('duli_chars_time', Date.now().toString());
+    } catch(e) {}
+  } catch(e) { console.error('loadChars error:', e); }
+} // pre-sorted keys cache
+
+async function loadDictFromSupabase() {
+  const loadingEl = document.getElementById('dict-loading');
+
+  // Try cache first
+  try {
+    const cached = localStorage.getItem('duli_dict');
+    const cachedTime = localStorage.getItem('duli_dict_time');
+    const ONE_DAY = 86400000;
+    if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < ONE_DAY) {
+      DICT = JSON.parse(cached);
+      _dictKeys = Object.keys(DICT).sort((a, b) => b.length - a.length);
+      DICT_LOADED = true;
+      if (loadingEl) loadingEl.style.display = 'none';
+      renderLibrary();
+      return;
+    }
+  } catch(e) {}
+
+  if (loadingEl) loadingEl.style.display = 'block';
+  try {
+    let all = [];
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/lang_dictionary?language=eq.zh&select=word,pinyin,meaning_rus,meaning_eng,radical,hsk&limit=${pageSize}&offset=${offset}`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      const rows = await res.json();
+      if (!rows.length) break;
+      all = all.concat(rows);
+      offset += pageSize;
+      if (rows.length < pageSize) break;
+    }
+    all.forEach(row => {
+      DICT[row.word] = {
+        pinyin: row.pinyin || '',
+        meaning: row.meaning_rus || row.meaning_eng || '',
+        radical: row.radical || '',
+        hsk: row.hsk || 0,
+      };
+    });
+    _dictKeys = Object.keys(DICT).sort((a, b) => b.length - a.length);
+    DICT_LOADED = true;
+    // Save to cache
+    try {
+      localStorage.setItem('duli_dict', JSON.stringify(DICT));
+      localStorage.setItem('duli_dict_time', Date.now().toString());
+    } catch(e) {}
+    if (loadingEl) loadingEl.style.display = 'none';
+    renderLibrary();
+  } catch(e) {
+    console.error('Dict load error:', e);
+    if (loadingEl) loadingEl.textContent = 'Ошибка загрузки словаря';
+  }
+}
+
+// ── Dictionary (fallback empty, loaded from Supabase) ────────────────────────
+const _DICT_PLACEHOLDER = {
+  "随着":{"pinyin":"suí zhe","meaning":"along with, as","radical":"阝","hsk":4},
+  "人工智能":{"pinyin":"rén gōng zhì néng","meaning":"artificial intelligence","radical":"人(person)","hsk":5},
+  "技术":{"pinyin":"jì shù","meaning":"technology, skill","radical":"手(hand)","hsk":4},
+  "迅速":{"pinyin":"xùn sù","meaning":"rapid, swift","radical":"辶(walk)","hsk":4},
+  "普及":{"pinyin":"pǔ jí","meaning":"widespread, popularize","radical":"日(sun)","hsk":5},
+  "越来越":{"pinyin":"yuè lái yuè","meaning":"more and more","radical":"走(walk)","hsk":4},
+  "企业":{"pinyin":"qǐ yè","meaning":"enterprise, company","radical":"人(person)","hsk":4},
+  "探索":{"pinyin":"tàn suǒ","meaning":"explore, probe","radical":"手(hand)","hsk":5},
+  "如何":{"pinyin":"rú hé","meaning":"how, in what way","radical":"女(woman)","hsk":4},
+  "应用":{"pinyin":"yìng yòng","meaning":"apply, application","radical":"广(shelter)","hsk":4},
+  "实际":{"pinyin":"shí jì","meaning":"actual, practical","radical":"宀(roof)","hsk":4},
+  "工作":{"pinyin":"gōng zuò","meaning":"work, job","radical":"工(work)","hsk":1},
+  "发展":{"pinyin":"fā zhǎn","meaning":"develop, development","radical":"弓(bow)","hsk":3},
+  "社会":{"pinyin":"shè huì","meaning":"society","radical":"礻(spirit)","hsk":3},
+  "经济":{"pinyin":"jīng jì","meaning":"economy, economics","radical":"纟(silk)","hsk":4},
+  "文化":{"pinyin":"wén huà","meaning":"culture","radical":"文(writing)","hsk":3},
+  "教育":{"pinyin":"jiào yù","meaning":"education","radical":"攴(strike)","hsk":3},
+  "政府":{"pinyin":"zhèng fǔ","meaning":"government","radical":"文(writing)","hsk":4},
+  "环境":{"pinyin":"huán jìng","meaning":"environment","radical":"土(earth)","hsk":4},
+  "问题":{"pinyin":"wèn tí","meaning":"problem, question","radical":"口(mouth)","hsk":2},
+  "方面":{"pinyin":"fāng miàn","meaning":"aspect, side","radical":"方(square)","hsk":3},
+  "影响":{"pinyin":"yǐng xiǎng","meaning":"influence, effect","radical":"日(sun)","hsk":4},
+  "重要":{"pinyin":"zhòng yào","meaning":"important","radical":"里(village)","hsk":3},
+  "可能":{"pinyin":"kě néng","meaning":"possible, maybe","radical":"口(mouth)","hsk":3},
+  "需要":{"pinyin":"xū yào","meaning":"need, require","radical":"雨(rain)","hsk":3},
+  "已经":{"pinyin":"yǐ jīng","meaning":"already","radical":"己(self)","hsk":2},
+  "通过":{"pinyin":"tōng guò","meaning":"through, by means of","radical":"辶(walk)","hsk":4},
+  "提高":{"pinyin":"tí gāo","meaning":"improve, raise","radical":"手(hand)","hsk":4},
+  "认为":{"pinyin":"rèn wéi","meaning":"think, believe","radical":"讠(speech)","hsk":3},
+  "表示":{"pinyin":"biǎo shì","meaning":"express, indicate","radical":"衣(clothes)","hsk":3},
+  "进行":{"pinyin":"jìn xíng","meaning":"carry out, conduct","radical":"辶(walk)","hsk":4},
+  "关系":{"pinyin":"guān xi","meaning":"relationship, concern","radical":"关(pass)","hsk":3},
+  "情况":{"pinyin":"qíng kuàng","meaning":"situation, condition","radical":"忄(heart)","hsk":4},
+  "方法":{"pinyin":"fāng fǎ","meaning":"method, way","radical":"方(square)","hsk":3},
+  "以及":{"pinyin":"yǐ jí","meaning":"as well as, and","radical":"人(person)","hsk":4},
+  "不仅":{"pinyin":"bù jǐn","meaning":"not only","radical":"一(one)","hsk":4},
+  "而且":{"pinyin":"ér qiě","meaning":"moreover, and also","radical":"而(and)","hsk":3},
+  "虽然":{"pinyin":"suī rán","meaning":"although, even though","radical":"虫(insect)","hsk":3},
+  "因此":{"pinyin":"yīn cǐ","meaning":"therefore, thus","radical":"囗(enclosure)","hsk":4},
+  "目前":{"pinyin":"mù qián","meaning":"currently, at present","radical":"目(eye)","hsk":4},
+  "同时":{"pinyin":"tóng shí","meaning":"at the same time","radical":"囗(enclosure)","hsk":4},
+  "主要":{"pinyin":"zhǔ yào","meaning":"main, primary","radical":"丶(dot)","hsk":3},
+  "国家":{"pinyin":"guó jiā","meaning":"country, nation","radical":"囗(enclosure)","hsk":2},
+  "生活":{"pinyin":"shēng huó","meaning":"life, live","radical":"生(life)","hsk":2},
+  "时间":{"pinyin":"shí jiān","meaning":"time","radical":"日(sun)","hsk":2},
+  "世界":{"pinyin":"shì jiè","meaning":"world","radical":"一(one)","hsk":2},
+  "中国":{"pinyin":"zhōng guó","meaning":"China","radical":"囗(enclosure)","hsk":1},
+  "人们":{"pinyin":"rén men","meaning":"people","radical":"人(person)","hsk":2},
+  "他们":{"pinyin":"tā men","meaning":"they, them","radical":"人(person)","hsk":1},
+  "我们":{"pinyin":"wǒ men","meaning":"we, us","radical":"戈(spear)","hsk":1},
+  "自己":{"pinyin":"zì jǐ","meaning":"oneself, self","radical":"自(self)","hsk":2},
+  "没有":{"pinyin":"méi yǒu","meaning":"don't have, there isn't","radical":"氵(water)","hsk":1},
+  "可以":{"pinyin":"kě yǐ","meaning":"can, may","radical":"口(mouth)","hsk":1},
+  "什么":{"pinyin":"shén me","meaning":"what","radical":"人(person)","hsk":1},
+  "为什么":{"pinyin":"wèi shén me","meaning":"why","radical":"爪(claw)","hsk":2},
+  "怎么":{"pinyin":"zěn me","meaning":"how, why","radical":"忄(heart)","hsk":1},
+  "知道":{"pinyin":"zhī dào","meaning":"know, be aware of","radical":"矢(arrow)","hsk":2},
+  "觉得":{"pinyin":"jué de","meaning":"feel, think","radical":"见(see)","hsk":2},
+  "希望":{"pinyin":"xī wàng","meaning":"hope, wish","radical":"巾(cloth)","hsk":3},
+  "努力":{"pinyin":"nǔ lì","meaning":"effort, work hard","radical":"女(woman)","hsk":3},
+  "成功":{"pinyin":"chéng gōng","meaning":"succeed, success","radical":"戈(spear)","hsk":3},
+  "失败":{"pinyin":"shī bài","meaning":"fail, failure","radical":"人(person)","hsk":4},
+  "机会":{"pinyin":"jī huì","meaning":"opportunity, chance","radical":"木(wood)","hsk":3},
+  "挑战":{"pinyin":"tiǎo zhàn","meaning":"challenge","radical":"手(hand)","hsk":5},
+  "解决":{"pinyin":"jiě jué","meaning":"solve, resolve","radical":"角(horn)","hsk":4},
+  "建立":{"pinyin":"jiàn lì","meaning":"establish, build","radical":"廴(walk)","hsk":4},
+  "支持":{"pinyin":"zhī chí","meaning":"support","radical":"手(hand)","hsk":4},
+  "参与":{"pinyin":"cān yù","meaning":"participate, take part","radical":"厶(private)","hsk":5},
+  "合作":{"pinyin":"hé zuò","meaning":"cooperate, collaborate","radical":"口(mouth)","hsk":4},
+  "交流":{"pinyin":"jiāo liú","meaning":"exchange, communicate","radical":"亠(lid)","hsk":4},
+  "了解":{"pinyin":"liǎo jiě","meaning":"understand, know about","radical":"亅(hook)","hsk":3},
+  "研究":{"pinyin":"yán jiū","meaning":"research, study","radical":"石(stone)","hsk":4},
+  "分析":{"pinyin":"fēn xī","meaning":"analyze, analysis","radical":"刀(knife)","hsk":4},
+  "结果":{"pinyin":"jiē guǒ","meaning":"result, outcome","radical":"纟(silk)","hsk":3},
+  "过程":{"pinyin":"guò chéng","meaning":"process, course","radical":"辶(walk)","hsk":4},
+  "原因":{"pinyin":"yuán yīn","meaning":"reason, cause","radical":"厂(cliff)","hsk":4},
+  "目的":{"pinyin":"mù dì","meaning":"purpose, goal","radical":"目(eye)","hsk":4},
+  "基础":{"pinyin":"jī chǔ","meaning":"foundation, basis","radical":"土(earth)","hsk":4},
+  "条件":{"pinyin":"tiáo jiàn","meaning":"condition, term","radical":"木(wood)","hsk":4},
+  "程度":{"pinyin":"chéng dù","meaning":"degree, extent","radical":"禾(grain)","hsk":4},
+  "标准":{"pinyin":"biāo zhǔn","meaning":"standard, criterion","radical":"木(wood)","hsk":4},
+  "数据":{"pinyin":"shù jù","meaning":"data","radical":"攴(strike)","hsk":5},
+  "信息":{"pinyin":"xìn xī","meaning":"information, news","radical":"讠(speech)","hsk":4},
+  "网络":{"pinyin":"wǎng luò","meaning":"network, internet","radical":"纟(silk)","hsk":4},
+  "系统":{"pinyin":"xì tǒng","meaning":"system","radical":"纟(silk)","hsk":4},
+  "平台":{"pinyin":"píng tái","meaning":"platform","radical":"干(dry)","hsk":5},
+  "功能":{"pinyin":"gōng néng","meaning":"function, feature","radical":"工(work)","hsk":5},
+  "效果":{"pinyin":"xiào guǒ","meaning":"effect, result","radical":"攴(strike)","hsk":4},
+  "质量":{"pinyin":"zhì liàng","meaning":"quality","radical":"贝(shell)","hsk":4},
+  "价值":{"pinyin":"jià zhí","meaning":"value, worth","radical":"人(person)","hsk":4},
+  "意义":{"pinyin":"yì yì","meaning":"meaning, significance","radical":"心(heart)","hsk":4},
+  "作用":{"pinyin":"zuò yòng","meaning":"role, function, effect","radical":"人(person)","hsk":4},
+  "能力":{"pinyin":"néng lì","meaning":"ability, capability","radical":"厶(private)","hsk":3},
+  "水平":{"pinyin":"shuǐ píng","meaning":"level, standard","radical":"氵(water)","hsk":3},
+  "方向":{"pinyin":"fāng xiàng","meaning":"direction","radical":"方(square)","hsk":3},
+  "计划":{"pinyin":"jì huà","meaning":"plan, project","radical":"讠(speech)","hsk":3},
+  "完成":{"pinyin":"wán chéng","meaning":"complete, finish","radical":"宀(roof)","hsk":3},
+  "开始":{"pinyin":"kāi shǐ","meaning":"begin, start","radical":"廾(hands)","hsk":2},
+  "继续":{"pinyin":"jì xù","meaning":"continue","radical":"纟(silk)","hsk":4},
+  "停止":{"pinyin":"tíng zhǐ","meaning":"stop, halt","radical":"亻(person)","hsk":4},
+  "改变":{"pinyin":"gǎi biàn","meaning":"change, alter","radical":"攴(strike)","hsk":4},
+  "增加":{"pinyin":"zēng jiā","meaning":"increase, add","radical":"土(earth)","hsk":4},
+  "减少":{"pinyin":"jiǎn shǎo","meaning":"reduce, decrease","radical":"冫(ice)","hsk":4},
+  "提供":{"pinyin":"tí gōng","meaning":"provide, supply","radical":"手(hand)","hsk":4},
+  "使用":{"pinyin":"shǐ yòng","meaning":"use, employ","radical":"亻(person)","hsk":3},
+  "产生":{"pinyin":"chǎn shēng","meaning":"produce, generate","radical":"亠(lid)","hsk":4},
+  "形成":{"pinyin":"xíng chéng","meaning":"form, take shape","radical":"彡(hair)","hsk":4},
+  "表现":{"pinyin":"biǎo xiàn","meaning":"perform, show","radical":"衣(clothes)","hsk":4},
+  "强调":{"pinyin":"qiáng diào","meaning":"emphasize, stress","radical":"弓(bow)","hsk":5},
+  "指出":{"pinyin":"zhǐ chū","meaning":"point out, indicate","radical":"手(hand)","hsk":4},
+  "认识":{"pinyin":"rèn shi","meaning":"know, recognize","radical":"讠(speech)","hsk":3},
+  "理解":{"pinyin":"lǐ jiě","meaning":"understand, comprehend","radical":"王(king)","hsk":4},
+  "注意":{"pinyin":"zhù yì","meaning":"pay attention, notice","radical":"氵(water)","hsk":3},
+  "考虑":{"pinyin":"kǎo lǜ","meaning":"consider, think over","radical":"耂(old)","hsk":4},
+  "决定":{"pinyin":"jué dìng","meaning":"decide, determine","radical":"冫(ice)","hsk":3},
+  "选择":{"pinyin":"xuǎn zé","meaning":"choose, select","radical":"辶(walk)","hsk":3},
+  "面对":{"pinyin":"miàn duì","meaning":"face, confront","radical":"面(face)","hsk":4},
+  "依靠":{"pinyin":"yī kào","meaning":"rely on, depend on","radical":"亻(person)","hsk":5},
+  "保持":{"pinyin":"bǎo chí","meaning":"keep, maintain","radical":"亻(person)","hsk":4},
+  "保证":{"pinyin":"bǎo zhèng","meaning":"guarantee, ensure","radical":"亻(person)","hsk":4},
+  "实现":{"pinyin":"shí xiàn","meaning":"realize, achieve","radical":"宀(roof)","hsk":4},
+  "达到":{"pinyin":"dá dào","meaning":"reach, achieve","radical":"辶(walk)","hsk":4},
+  "满足":{"pinyin":"mǎn zú","meaning":"удовлетворять","radical":"氵","hsk":4},
+};
+// Merge placeholder into DICT until Supabase loads
+Object.assign(DICT, _DICT_PLACEHOLDER);
+
+const HSK_PATTERNS = [
+  {pattern:"随着…越来越…", regex:/随着.{1,20}越来越/, explanation:"As... increasingly... (нарастание)", hsk:4},
+  {pattern:"不仅…而且…", regex:/不仅.{1,20}而且/, explanation:"Not only... but also... (добавление)", hsk:4},
+  {pattern:"虽然…但是…", regex:/虽然.{1,20}但是/, explanation:"Although... nevertheless... (уступка)", hsk:3},
+  {pattern:"既然…就…", regex:/既然.{1,20}就/, explanation:"Since/now that... then... (следствие)", hsk:4},
+  {pattern:"与其…不如…", regex:/与其.{1,20}不如/, explanation:"Rather than... better to... (предпочтение)", hsk:5},
+  {pattern:"尽管…还是…", regex:/尽管.{1,20}还是/, explanation:"Despite... still... (контраст)", hsk:5},
+  {pattern:"只有…才…", regex:/只有.{1,20}才/, explanation:"Only if... then... (условие)", hsk:4},
+  {pattern:"将…应用到…", regex:/将.{1,15}应用到/, explanation:"Apply [sth] to [sth] (формальный)", hsk:5},
+  {pattern:"如何…", regex:/如何[^，。]{2,20}/, explanation:"How to... (встроенный вопрос)", hsk:4},
+  {pattern:"对于…来说", regex:/对于.{1,15}来说/, explanation:"For... / As far as ... is concerned", hsk:4},
+  {pattern:"通过…来…", regex:/通过.{1,15}来/, explanation:"Through/by means of... to...", hsk:4},
+  {pattern:"在…方面", regex:/在.{1,10}方面/, explanation:"In terms of... (в сфере)", hsk:4},
+  {pattern:"越…越…", regex:/越.{1,10}越/, explanation:"The more... the more...", hsk:3},
+  {pattern:"以…为…", regex:/以.{1,10}为/, explanation:"To take... as... (формальный)", hsk:5},
+  {pattern:"无论…都…", regex:/无论.{1,15}都/, explanation:"No matter... always... (безусловное)", hsk:4},
+];
+
+// ── State ───────────────────────────────────────────────────────────────────
+let state = {
+  texts: [],
+  wordData: {},
+  userPatterns: [],
+  activeText: null,
+  sentences: [],
+  segmentedSentences: null,
+  sentenceTimes: [],
+  activeSentence: -1,
+  selectedWord: null,
+  showPinyin: true,
+  gapMode: false,
+  shadowMode: false,
+  pendingSentenceIdx: 0,
+  isPlaying: false,
+  currentView: 'library',
+};
+
+// ── Supabase texts ────────────────────────────────────────────────────────────
+async function saveTextToSupabase(text) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_texts`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify({ language: 'zh', title: text.title, content: text.content, user_id: currentUser.id })
+    });
+    const rows = await res.json();
+    return rows[0]?.id || null;
+  } catch(e) { console.error('saveText error:', e); return null; }
+}
+
+async function deleteTextFromSupabase(id) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/lang_texts?id=eq.${id}`, {
+      method: 'DELETE', headers: authHeaders()
+    });
+  } catch(e) { console.error('deleteText error:', e); }
+}
+
+async function loadTextsFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_texts?language=eq.zh&order=created_at.desc&select=id,title,content`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    state.texts = rows.map(r => ({ id: r.id, title: r.title, content: r.content }));
+    renderLibrary();
+  } catch(e) { console.error('loadTexts error:', e); }
+}
+
+// ── Supabase word data ────────────────────────────────────────────────────────
+let _wordSaveTimer = {};
+async function saveWordToSupabase(word) {
+  const entry = state.wordData[word];
+  if (!entry || !currentUser) return;
+  const body = {
+    language: 'zh', word, user_id: currentUser.id,
+    clicks: entry.clicks, last_click: entry.lastClick,
+    user_meaning: entry.userMeaning || null
+  };
+  try {
+    // Try PATCH first (update existing)
+    const patch = await fetch(
+      `${SUPABASE_URL}/rest/v1/lang_word_data?user_id=eq.${currentUser.id}&language=eq.zh&word=eq.${encodeURIComponent(word)}`,
+      { method: 'PATCH', headers: { ...authHeaders(), 'Prefer': 'return=minimal' }, body: JSON.stringify(body) }
+    );
+    // If nothing was updated (404 or 0 rows), insert
+    const count = patch.headers.get('content-range');
+    if (!count || count === '*/0') {
+      await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(body)
+      });
+    }
+  } catch(e) { console.error('saveWord error:', e); }
+}
+
+function saveWordDebounced(word) {
+  clearTimeout(_wordSaveTimer[word]);
+  _wordSaveTimer[word] = setTimeout(() => saveWordToSupabase(word), 1000);
+}
+
+async function loadWordDataFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_word_data?language=eq.zh&select=word,clicks,last_click,user_meaning`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    rows.forEach(r => {
+      state.wordData[r.word] = { clicks: r.clicks, lastClick: r.last_click, userMeaning: r.user_meaning };
+    });
+  } catch(e) { console.error('loadWordData error:', e); }
+}
+
+// ── Supabase user patterns ─────────────────────────────────────────────────────
+async function savePatternToSupabase(pattern) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_user_patterns`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Prefer': 'return=representation' },
+      body: JSON.stringify({ language: 'zh', text: pattern.text, note: pattern.note, user_id: currentUser.id })
+    });
+    const rows = await res.json();
+    return rows[0]?.id || null;
+  } catch(e) { console.error('savePattern error:', e); return null; }
+}
+
+async function loadPatternsFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lang_user_patterns?language=eq.zh&order=created_at.asc&select=id,text,note`, {
+      headers: authHeaders()
+    });
+    const rows = await res.json();
+    state.userPatterns = rows.map(r => ({ id: r.id, text: r.text, note: r.note }));
+  } catch(e) { console.error('loadPatterns error:', e); }
+}
+
+// ── Speech ────────────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'zh-CN';
+  utt.rate = 0.9;
+  // Try to find a Chinese voice
+  const voices = window.speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+  if (zhVoice) utt.voice = zhVoice;
+  window.speechSynthesis.speak(utt);
+}
+
+function speakWord() {
+  if (state.selectedWord) speak(state.selectedWord);
+}
+
+function speakSentence() {
+  // Speak currently highlighted sentence or first one
+  const idx = state.activeSentence >= 0 ? state.activeSentence : 0;
+  if (state.sentences[idx]) speak(state.sentences[idx]);
+}
+
+// Load voices on init (needed for some browsers)
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+// ── Status ──────────────────────────────────────────────────────────────────
+function computeStatus(entry) {
+  if (!entry || !entry.clicks) return 0;
+  const days = (Date.now() - entry.lastClick) / 86400000;
+  if (entry.clicks >= 3 && days > 7) return 3;
+  if (entry.clicks >= 3) return 2;
+  if (entry.clicks >= 1) return 1;
+  return 0;
+}
+function statusBg(s) {
+  if (s === 1) return 'rgba(239,159,123,0.25)';
+  if (s === 2) return 'rgba(250,199,117,0.35)';
+  if (s === 3) return 'transparent'; // known — no highlight
+  return 'transparent';
+}
+function statusDot(s) {
+  if (s === 1) return '#F09595';
+  if (s === 2) return '#FAC775';
+  if (s === 3) return '#5DCAA5';
+  return '#ccc';
+}
+
+// ── Tokenizer ────────────────────────────────────────────────────────────────
+function tokenize(text) {
+  const tokens = [];
+  const keys = _dictKeys.length ? _dictKeys : Object.keys(DICT).sort((a,b) => b.length - a.length);
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (/[\u4e00-\u9fff]/.test(ch)) {
+      let matched = null;
+      for (const k of keys) {
+        if (k.length > text.length - i) continue;
+        if (text.slice(i, i+k.length) === k) { matched = k; break; }
+      }
+      if (matched) { tokens.push({type:'word', text:matched, info:DICT[matched]}); i += matched.length; }
+      else { tokens.push({type:'word', text:ch, info:null}); i++; }
+    } else if (/[\s\n]/.test(ch)) { tokens.push({type:'space', text:ch}); i++; }
+    else { tokens.push({type:'punct', text:ch}); i++; }
+  }
+  return tokens;
+}
+
+function splitSentences(text) {
+  return text.split(/(?<=[。！？；\n])/).filter(s => s.trim());
+}
+
+// ── Coverage ─────────────────────────────────────────────────────────────────
+function coverage(content) {
+  const tokens = tokenize(content).filter(t => t.type === 'word' && t.info);
+  const unique = [...new Set(tokens.map(t => t.text))];
+  if (!unique.length) return 0;
+  const known = unique.filter(w => computeStatus(state.wordData[w]) >= 2).length;
+  return Math.round(known / unique.length * 100);
+}
+
+function coverageFromSegmented() {
+  if (!state.segmentedSentences) return 0;
+  const all = state.segmentedSentences.flat().filter(w => DICT[w]);
+  const unique = [...new Set(all)];
+  if (!unique.length) return 0;
+  const known = unique.filter(w => computeStatus(state.wordData[w]) >= 2).length;
+  return Math.round(known / unique.length * 100);
+}
+
+function updateCoverage() {
+  if (!state.activeText) return;
+  const cov = state.segmentedSentences ? coverageFromSegmented() : coverage(state.activeText.content);
+  document.getElementById('cov-fill').style.width = cov + '%';
+  document.getElementById('cov-pct').textContent = cov + '%';
+}
+
+// ── Views ────────────────────────────────────────────────────────────────────
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(name + '-view').classList.add('active');
+  state.currentView = name;
+  const isLib = name === 'library';
+  document.getElementById('back-btn').style.display = isLib ? 'none' : 'block';
+  document.getElementById('vocab-nav-btn').style.display = isLib ? 'block' : 'none';
+  document.getElementById('patterns-nav-btn').style.display = isLib ? 'block' : 'none';
+  if (name === 'vocab') renderVocab();
+  if (name === 'gpatterns') renderGPatterns();
+  if (name === 'library') renderLibrary();
+}
+
+function goLibrary() { showView('library'); }
+
+// ── Library ──────────────────────────────────────────────────────────────────
+function renderLibrary() {
+  const known = Object.values(state.wordData).filter(v => computeStatus(v) === 3).length;
+  document.getElementById('lib-sub').textContent = `${state.texts.length} текстов · ${known} знакомых слов`;
+  const es = document.getElementById('empty-state');
+  const tl = document.getElementById('texts-list');
+  es.style.display = state.texts.length === 0 ? 'block' : 'none';
+  tl.innerHTML = '';
+  state.texts.forEach((t, idx) => {
+    const cov = coverage(t.content);
+    const tokens = tokenize(t.content).filter(tok => tok.type === 'word' && tok.info);
+    const unique = [...new Set(tokens.map(tok => tok.text))];
+    const newW = unique.filter(w => !state.wordData[w]).length;
+    const color = cov > 70 ? 'var(--green)' : cov > 40 ? 'var(--amber)' : 'var(--text2)';
+    const barColor = cov > 70 ? '#5DCAA5' : cov > 40 ? '#FAC775' : '#F09595';
+    const card = document.createElement('div');
+    card.className = 'text-card';
+    card.innerHTML = `
+      <div class="text-card-header">
+        <div class="text-card-title">${t.title}</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="text-card-pct" style="color:${color}">${cov}%</div>
+          <button onclick="event.stopPropagation();deleteText(${idx})" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:2px 6px" title="Удалить">×</button>
+        </div>
+      </div>
+      <div class="text-card-preview">${t.content.slice(0,80).replace(/\n/g,' ')}…</div>
+      <div class="text-card-bar-row">
+        <div class="bar-track"><div class="bar-fill" style="width:${cov}%;background:${barColor}"></div></div>
+        <span class="text-card-new">${newW} новых слов</span>
+      </div>`;
+    card.onclick = () => openText(idx);
+    tl.appendChild(card);
+  });
+}
+
+async function deleteText(idx) {
+  if (!confirm('Удалить текст?')) return;
+  const t = state.texts[idx];
+  await deleteTextFromSupabase(t.id);
+  state.texts.splice(idx, 1);
+  renderLibrary();
+}
+
+function togglePaste() {
+  const btn = document.getElementById('paste-btn');
+  const form = document.getElementById('paste-form');
+  const fileBtn = document.getElementById('file-btn');
+  const open = !form.classList.contains('open');
+  form.classList.toggle('open', open);
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '× Закрыть' : '+ Вставить';
+  fileBtn.classList.toggle('secondary', open);
+}
+
+async function addPastedText() {
+  const content = document.getElementById('paste-content').value.trim();
+  if (!content) return;
+  const title = document.getElementById('paste-title-input').value.trim() || `Текст ${state.texts.length + 1}`;
+  const btn = document.getElementById('paste-add-btn');
+  btn.disabled = true;
+  btn.textContent = 'Сохраняю...';
+  const id = await saveTextToSupabase({ title, content });
+  const newText = { id: id || Date.now(), title, content };
+  state.texts.unshift(newText);
+  document.getElementById('paste-title-input').value = '';
+  document.getElementById('paste-content').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Добавить →';
+  togglePaste();
+  renderLibrary();
+}
+
+function loadFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    const title = file.name.replace(/\.[^.]+$/, '');
+    const content = ev.target.result;
+    const id = await saveTextToSupabase({ title, content });
+    state.texts.unshift({ id: id || Date.now(), title, content });
+    renderLibrary();
+  };
+  reader.readAsText(file, 'utf-8');
+  e.target.value = '';
+}
+
+// ── Segmentation via Edge Function ───────────────────────────────────────────
+const _segCache = {};
+
+async function segmentText(content) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/segment-text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ text: content })
+    });
+    const data = await res.json();
+    return data.words || [];
+  } catch(e) {
+    console.error('segment error:', e);
+    return tokenize(content).map(t => t.text);
+  }
+}
+
+function wordsToTokens(words) {
+  return words.map(w => {
+    if (/[\u4e00-\u9fff]/.test(w[0])) {
+      const info = DICT[w] || (w.length === 1 ? CHARS[w] : null);
+      return { type: 'word', text: w, info: info || null };
+    }
+    return { type: 'punct', text: w };
+  });
+}
+
+function splitWordsIntoSentences(words, sentences) {
+  const result = [];
+  let wordIdx = 0;
+  for (const sentence of sentences) {
+    const sentWords = [];
+    let charCount = 0;
+    while (wordIdx < words.length && charCount < sentence.length) {
+      sentWords.push(words[wordIdx]);
+      charCount += words[wordIdx].length;
+      wordIdx++;
+    }
+    result.push(sentWords);
+  }
+  return result;
+}
+
+// ── Open text ────────────────────────────────────────────────────────────────
+async function openText(idx) {
+  const text = state.texts[idx];
+  state.activeText = text;
+  state.sentences = splitSentences(text.content);
+  state.sentenceTimes = new Array(state.sentences.length).fill(null);
+  state.activeSentence = -1;
+  state.selectedWord = null;
+  state.pendingSentenceIdx = 0;
+  showView('reader');
+  switchTab('read');
+
+  document.getElementById('text-file-title').textContent = text.title;
+  document.getElementById('text-body').innerHTML = '<div style="padding:32px;color:var(--text3);font-size:14px">⏳ Сегментирую текст...</div>';
+  updateWordCard();
+  document.getElementById('no-audio').style.display = 'block';
+  document.getElementById('has-audio').style.display = 'none';
+
+  if (!_segCache[text.id]) {
+    const allWords = await segmentText(text.content);
+    _segCache[text.id] = splitWordsIntoSentences(allWords, state.sentences);
+  }
+
+  state.segmentedSentences = _segCache[text.id];
+  renderReader();
+  updateCoverage();
+}
+
+// ── Reader ───────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.rtab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-read').style.display = tab === 'read' ? 'block' : 'none';
+  document.getElementById('tab-patterns').style.display = tab === 'patterns' ? 'block' : 'none';
+  document.getElementById('tab-audio').style.display = tab === 'audio' ? 'block' : 'none';
+  document.querySelector('[data-tab="patterns"]').textContent = `Паттерны (${getFoundPatterns().length + state.userPatterns.length})`;
+  if (tab === 'patterns') renderPatterns();
+  if (tab === 'audio') renderSentenceList();
+}
+
+function renderReader() {
+  document.getElementById('text-file-title').textContent = state.activeText.title;
+  const body = document.getElementById('text-body');
+  body.innerHTML = '';
+  state.sentences.forEach((sentence, si) => {
+    const span = document.createElement('span');
+    span.className = 'sentence';
+    span.dataset.si = si;
+    const rawTokens = state.segmentedSentences ? wordsToTokens(state.segmentedSentences[si] || []) : tokenize(sentence);
+    rawTokens.forEach(tok => {
+      if (tok.type !== 'word') {
+        const s = document.createElement('span');
+        s.style.fontFamily = "'Noto Sans SC', sans-serif";
+        s.style.fontSize = '19px';
+        s.textContent = tok.text;
+        span.appendChild(s);
+        return;
+      }
+      const ws = document.createElement('span');
+      ws.className = 'word-span';
+      ws.dataset.word = tok.text;
+      applyWordStyle(ws, tok.text);
+      const status = computeStatus(state.wordData[tok.text]);
+      // pinyin
+      const py = document.createElement('span');
+      py.className = 'pinyin-label';
+      py.textContent = tok.info ? tok.info.pinyin : '';
+      py.style.display = state.showPinyin && tok.info && status < 3 ? 'block' : 'none';
+      // char
+      const ch = document.createElement('span');
+      ch.className = 'word-char';
+      ch.textContent = tok.text;
+      ws.appendChild(py);
+      ws.appendChild(ch);
+      ws.onclick = (e) => { e.stopPropagation(); clickWord(tok.text, ws); };
+      span.appendChild(ws);
+    });
+    span.onclick = () => jumpToSentence(si);
+    body.appendChild(span);
+  });
+  applyGapMode();
+}
+
+function applyWordStyle(ws, word) {
+  const status = computeStatus(state.wordData[word]);
+  ws.style.background = ws.classList.contains('selected') ? 'rgba(83,74,183,0.18)' : statusBg(status);
+}
+
+function clickWord(word, el) {
+  const prev = state.wordData[word] || { clicks: 0, lastClick: Date.now() };
+  state.wordData[word] = { ...prev, clicks: prev.clicks + 1, lastClick: Date.now() };
+  saveWordDebounced(word);
+  document.querySelectorAll('.word-span.selected').forEach(s => {
+    s.classList.remove('selected');
+    applyWordStyle(s, s.dataset.word);
+  });
+  el.classList.add('selected');
+  state.selectedWord = word;
+  updateWordCard();
+  updateCoverage();
+  document.querySelectorAll(`.word-span[data-word="${word}"]`).forEach(s => {
+    if (!s.classList.contains('selected')) applyWordStyle(s, word);
+  });
+}
+
+function togglePinyin() {
+  state.showPinyin = !state.showPinyin;
+  document.getElementById('pinyin-btn').classList.toggle('on', state.showPinyin);
+  document.querySelectorAll('.pinyin-label').forEach(el => {
+    const ws = el.parentElement;
+    const word = ws.dataset.word;
+    const hasInfo = !!(DICT[word] || (word.length === 1 ? CHARS[word] : null));
+    const status = computeStatus(state.wordData[word]);
+    el.style.display = state.showPinyin && hasInfo && status < 3 ? 'block' : 'none';
+  });
+}
+
+function toggleGap() {
+  state.gapMode = !state.gapMode;
+  document.getElementById('gap-btn').classList.toggle('on', state.gapMode);
+  applyGapMode();
+}
+
+function applyGapMode() {
+  document.querySelectorAll('.word-char').forEach(el => {
+    const ws = el.parentElement;
+    const word = ws.dataset.word;
+    const status = computeStatus(state.wordData[word]);
+    if (state.gapMode && status >= 2 && Math.random() > 0.5) {
+      el.style.color = 'transparent';
+      el.style.borderBottom = '1.5px solid #999';
+    } else {
+      el.style.color = '';
+      el.style.borderBottom = '';
+    }
+  });
+}
+
+// ── Word card ────────────────────────────────────────────────────────────────
+function updateWordCard() {
+  const word = state.selectedWord;
+  const card = document.getElementById('word-card');
+  const wrap = document.getElementById('reader-wrap');
+  const overlay = document.getElementById('card-overlay');
+  const isMobile = window.innerWidth <= 600;
+  if (!word) {
+    card.classList.remove('open');
+    wrap.classList.remove('with-card');
+    if (overlay) overlay.style.display = 'none';
+    return;
+  }
+  card.classList.add('open');
+  if (!isMobile) wrap.classList.add('with-card');
+  if (overlay) overlay.style.display = isMobile ? 'block' : 'none';
+  const info = DICT[word] || (word.length === 1 ? CHARS[word] : null);
+  document.getElementById('wc-char').textContent = word;
+  const entry = state.wordData[word];
+  const status = computeStatus(entry);
+  if (info) {
+    document.getElementById('wc-pinyin').textContent = info.pinyin;
+    document.getElementById('wc-meaning').textContent = info.meaning;
+    document.getElementById('wc-radical').innerHTML = `<span style="font-family:'Noto Sans SC',sans-serif">Ключ: </span>${info.radical}`;
+    document.getElementById('wc-hsk').textContent = `HSK ${info.hsk}`;
+    document.getElementById('wc-not-found').style.display = 'none';
+    document.querySelectorAll('.wc-section').forEach(s => s.style.display = 'block');
+    // status buttons
+    document.querySelectorAll('.status-set-btn').forEach((btn, i) => {
+      btn.style.background = status === i ? statusBg(i) : '';
+      btn.style.borderColor = status === i ? '#999' : '';
+    });
+    // related
+    const related = Object.entries(DICT).filter(([w, d]) => w !== word && d.radical === info.radical).slice(0, 4);
+    const rl = document.getElementById('wc-related-list');
+    rl.innerHTML = related.map(([w, d]) => `<div class="related-row" onclick="clickWordByName('${w}')"><span class="related-word">${w}</span><span class="related-meaning">${d.meaning}</span></div>`).join('');
+    document.getElementById('wc-related').style.display = related.length ? 'block' : 'none';
+    document.getElementById('wc-user-meaning').value = entry?.userMeaning || '';
+  } else {
+    document.getElementById('wc-not-found').style.display = 'block';
+    document.querySelectorAll('.wc-section').forEach(s => s.style.display = 'none');
+    document.getElementById('wc-related').style.display = 'none';
+  }
+}
+
+function closeCard() {
+  document.querySelectorAll('.word-span.selected').forEach(s => { s.classList.remove('selected'); applyWordStyle(s, s.dataset.word); });
+  state.selectedWord = null;
+  updateWordCard();
+  const overlay = document.getElementById('card-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function setStatus(s) {
+  const word = state.selectedWord;
+  if (!word) return;
+  const clickMap = [0, 1, 3, 10];
+  const lastClickMap = [Date.now(), Date.now(), Date.now(), Date.now() - 8 * 86400000];
+  state.wordData[word] = { ...(state.wordData[word] || {}), clicks: clickMap[s], lastClick: lastClickMap[s] };
+  saveWordToSupabase(word);
+  updateWordCard();
+  // Refresh all spans of this word
+  document.querySelectorAll(`.word-span[data-word="${CSS.escape(word)}"]`).forEach(el => {
+    applyWordStyle(el, word);
+    // Update pinyin visibility
+    const py = el.querySelector('.pinyin-label');
+    if (py) {
+      const hasInfo = !!(DICT[word] || (word.length === 1 ? CHARS[word] : null));
+      const newStatus = computeStatus(state.wordData[word]);
+      py.style.display = state.showPinyin && hasInfo && newStatus < 3 ? 'block' : 'none';
+    }
+  });
+}
+
+function saveUserMeaning() {
+  const word = state.selectedWord;
+  if (!word) return;
+  state.wordData[word] = { ...(state.wordData[word] || {}), userMeaning: document.getElementById('wc-user-meaning').value };
+  saveWordToSupabase(word);
+}
+
+function clickWordByName(word) {
+  const prev = state.wordData[word] || { clicks: 0, lastClick: Date.now() };
+  state.wordData[word] = { ...prev, clicks: prev.clicks + 1, lastClick: Date.now() };
+  state.selectedWord = word;
+  saveWordDebounced(word);
+  updateWordCard();
+}
+
+// ── Patterns ─────────────────────────────────────────────────────────────────
+function getFoundPatterns() {
+  if (!state.activeText) return [];
+  return HSK_PATTERNS.filter(p => p.regex.test(state.activeText.content));
+}
+
+function renderPatterns() {
+  const found = getFoundPatterns();
+  const fl = document.getElementById('found-patterns-list');
+  fl.innerHTML = found.length === 0 && state.userPatterns.length === 0
+    ? '<div style="color:var(--text3);font-size:14px;margin-bottom:16px">Паттерны HSK не найдены в этом тексте.</div>' : '';
+  fl.innerHTML += found.map(p => `
+    <div class="pattern-card">
+      <div class="pattern-card-header">
+        <span class="pattern-name">${p.pattern}</span>
+        <span class="hsk-badge">HSK ${p.hsk}</span>
+      </div>
+      <div class="pattern-exp">${p.explanation}</div>
+    </div>`).join('');
+  document.getElementById('user-patterns-in-reader').innerHTML = state.userPatterns.map(p => `
+    <div class="pattern-card user">
+      <div class="pattern-card-header">
+        <span class="pattern-name">${p.text}</span>
+        <span class="user-badge">Моё</span>
+      </div>
+      <div class="pattern-exp">${p.note}</div>
+    </div>`).join('');
+}
+
+async function savePattern() {
+  const t = document.getElementById('pat-text-input').value.trim();
+  const n = document.getElementById('pat-note-input').value.trim();
+  if (!t) return;
+  const id = await savePatternToSupabase({ text: t, note: n });
+  state.userPatterns.push({ id, text: t, note: n });
+  document.getElementById('pat-text-input').value = '';
+  document.getElementById('pat-note-input').value = '';
+  renderPatterns();
+  document.querySelector('[data-tab="patterns"]').textContent = `Паттерны (${getFoundPatterns().length + state.userPatterns.length})`;
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function loadAudio(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const audio = document.getElementById('audio-player');
+  audio.src = url;
+  document.getElementById('no-audio').style.display = 'none';
+  document.getElementById('has-audio').style.display = 'block';
+  audio.ontimeupdate = () => {
+    const t = audio.currentTime;
+    let found = -1;
+    for (let i = state.sentenceTimes.length - 1; i >= 0; i--) {
+      if (state.sentenceTimes[i] !== null && t >= state.sentenceTimes[i]) { found = i; break; }
+    }
+    if (found !== state.activeSentence) {
+      state.activeSentence = found;
+      highlightSentence(found);
+      renderSentenceList();
+    }
+  };
+  audio.onplay = () => { state.isPlaying = true; document.getElementById('play-pause-btn').textContent = '⏸ Пауза'; };
+  audio.onpause = () => { state.isPlaying = false; document.getElementById('play-pause-btn').textContent = '▶ Играть'; };
+  renderSentenceList();
+  e.target.value = '';
+}
+
+function highlightSentence(si) {
+  document.querySelectorAll('.sentence').forEach(el => {
+    el.classList.toggle('highlight', parseInt(el.dataset.si) === si);
+  });
+  if (si >= 0) {
+    const el = document.querySelector(`.sentence[data-si="${si}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function togglePlay() {
+  const a = document.getElementById('audio-player');
+  state.isPlaying ? a.pause() : a.play();
+}
+
+function setRate(r) {
+  document.getElementById('audio-player').playbackRate = r;
+  document.querySelectorAll('.rate-btn').forEach(b => b.classList.toggle('on', parseFloat(b.dataset.rate) === r));
+}
+
+function toggleShadow() {
+  state.shadowMode = !state.shadowMode;
+  document.getElementById('shadow-btn').classList.toggle('on', state.shadowMode);
+}
+
+function markTime() {
+  const a = document.getElementById('audio-player');
+  if (!a.src) return;
+  state.sentenceTimes[state.pendingSentenceIdx] = a.currentTime;
+  state.pendingSentenceIdx = Math.min(state.pendingSentenceIdx + 1, state.sentences.length - 1);
+  document.getElementById('pending-idx').textContent = state.pendingSentenceIdx + 1;
+  document.getElementById('sync-info').textContent = `Отмечено: ${state.sentenceTimes.filter(t => t !== null).length} / ${state.sentences.length}`;
+  renderSentenceList();
+  // mark sentences as synced
+  document.querySelectorAll('.sentence').forEach(el => {
+    const si = parseInt(el.dataset.si);
+    el.classList.toggle('synced', state.sentenceTimes[si] !== null);
+  });
+}
+
+function resetSync() {
+  state.sentenceTimes = new Array(state.sentences.length).fill(null);
+  state.pendingSentenceIdx = 0;
+  document.getElementById('pending-idx').textContent = '1';
+  document.getElementById('sync-info').textContent = `Нажимай «Отметить» для каждого предложения`;
+  renderSentenceList();
+}
+
+function jumpToSentence(si) {
+  const t = state.sentenceTimes[si];
+  if (t === null) return;
+  document.getElementById('audio-player').currentTime = t;
+}
+
+function renderSentenceList() {
+  const sl = document.getElementById('sentence-list');
+  sl.innerHTML = state.sentences.map((s, i) => {
+    const t = state.sentenceTimes[i];
+    const marked = t !== null;
+    const active = state.activeSentence === i;
+    return `<div class="sent-row${active ? ' active' : ''}${marked ? ' synced' : ''}" onclick="jumpToSentence(${i})">
+      <span class="sent-time${marked ? ' marked' : ''}">${marked ? t.toFixed(1)+'s' : '#'+(i+1)}</span>
+      <span class="sent-preview">${s.slice(0,50)}${s.length > 50 ? '…' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Vocab view ────────────────────────────────────────────────────────────────
+function renderVocab() {
+  const all = Object.keys(state.wordData).length;
+  const learning = Object.values(state.wordData).filter(v => computeStatus(v) === 2).length;
+  const known = Object.values(state.wordData).filter(v => computeStatus(v) === 3).length;
+  document.getElementById('vocab-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-val">${all}</div><div class="stat-lbl">Всего встречено</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--amber)">${learning}</div><div class="stat-lbl">Учу</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--green)">${known}</div><div class="stat-lbl">Знаю</div></div>`;
+  document.getElementById('vocab-list').innerHTML = Object.entries(state.wordData)
+    .sort((a,b) => b[1].clicks - a[1].clicks)
+    .map(([word, entry]) => {
+      const info = DICT[word];
+      const s = computeStatus(entry);
+      const meaning = entry.userMeaning || (info ? info.meaning : '');
+      return `<div class="vrow">
+        <div class="vrow-left">
+          <span class="vrow-word">${word}</span>
+          ${info ? `<span class="vrow-pinyin">${info.pinyin}</span>` : ''}
+        </div>
+        <div class="vrow-right">
+          <span class="vrow-meaning">${meaning}</span>
+          <span class="vrow-dot" style="background:${statusDot(s)}"></span>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+// ── Global patterns view ───────────────────────────────────────────────────────
+function renderGPatterns() {
+  document.getElementById('gpatterns-list').innerHTML = HSK_PATTERNS.map(p => `
+    <div class="pattern-card">
+      <div class="pattern-card-header">
+        <span class="pattern-name">${p.pattern}</span>
+        <span class="hsk-badge">HSK ${p.hsk}</span>
+      </div>
+      <div class="pattern-exp">${p.explanation}</div>
+    </div>`).join('');
+  const gu = document.getElementById('gpatterns-user');
+  if (state.userPatterns.length) {
+    gu.innerHTML = `<div style="font-size:15px;font-weight:500;margin:24px 0 12px">Мои паттерны</div>` +
+      state.userPatterns.map(p => `
+        <div class="pattern-card user">
+          <div class="pattern-card-header">
+            <span class="pattern-name">${p.text}</span>
+            <span class="user-badge">Моё</span>
+          </div>
+          <div class="pattern-exp">${p.note}</div>
+        </div>`).join('');
+  } else gu.innerHTML = '';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+// Clear chars cache to force reload with new data
+localStorage.removeItem('duli_chars');
+localStorage.removeItem('duli_chars_time');
+renderLibrary();
+loadDictFromSupabase();
+loadCharsFromSupabase();
+restoreSession().then(ok => {
+  if (ok) onLoggedIn();
+});
+</script>
+</body>
+</html>
