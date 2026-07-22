@@ -80,6 +80,7 @@
   .badge.deadline-ok { background: #eee; color: var(--text2); }
   .badge.deadline-urgent { background: var(--amber-bg); color: var(--amber); }
   .badge.deadline-overdue { background: var(--red-bg); color: var(--red); }
+  .badge.new-request { background: #e9e5fb; color: #5b3fd1; }
 
   .order-desc { font-size: 13px; color: var(--text2); white-space: pre-wrap; }
 
@@ -172,6 +173,7 @@
     <input id="search" type="text" placeholder="Поиск по имени заказчика...">
     <div id="filters">
       <button class="filter-btn active" data-filter="all">Все</button>
+      <button class="filter-btn" data-filter="new_requests">Новые заявки</button>
       <button class="filter-btn" data-filter="unpaid">Не оплачено</button>
       <button class="filter-btn" data-filter="urgent">Горящие</button>
     </div>
@@ -428,6 +430,7 @@
       if (search && o.name.toLowerCase().indexOf(search) === -1) return false;
       if (filter === 'unpaid' && o.paid) return false;
       if (filter === 'urgent' && !isUrgentOrOverdue(o)) return false;
+      if (filter === 'new_requests' && o.reviewed) return false;
       return true;
     });
 
@@ -465,7 +468,9 @@
           : '<span class="order-chat">' + escapeHtml(o.chat) + '</span>';
       }
 
-      var badgesHtml = '<span class="badge ' + (o.paid ? 'paid' : 'unpaid') + '" data-toggle-paid="' + o.id + '">' + (o.paid ? 'Оплачено' : 'Не оплачено') + '</span>';
+      var badgesHtml = '';
+      if (!o.reviewed) badgesHtml += '<span class="badge new-request">Новая заявка</span>';
+      badgesHtml += '<span class="badge ' + (o.paid ? 'paid' : 'unpaid') + '" data-toggle-paid="' + o.id + '">' + (o.paid ? 'Оплачено' : 'Не оплачено') + '</span>';
       if (badge) badgesHtml += '<span class="badge ' + badge.cls + '">' + badge.text + '</span>';
 
       var photosHtml = '';
@@ -493,8 +498,9 @@
 
     var unpaidCount = orders.filter(function(o){ return !o.paid; }).length;
     var urgentCount = orders.filter(isUrgentOrOverdue).length;
+    var newCount = orders.filter(function(o){ return !o.reviewed; }).length;
     document.getElementById('stats').textContent =
-      'Всего: ' + orders.length + ' · Не оплачено: ' + unpaidCount + ' · Горит: ' + urgentCount;
+      'Всего: ' + orders.length + ' · Новых заявок: ' + newCount + ' · Не оплачено: ' + unpaidCount + ' · Горит: ' + urgentCount;
   }
 
   function escapeHtml(s) {
