@@ -129,7 +129,7 @@
       return;
     }
 
-    var done = orders.filter(function(o){ return o.status === 'done'; });
+    var done = orders.filter(function(o){ return o.status === 'ready' || o.status === 'done'; });
     var doneSum = done.reduce(function(s, o){ return s + (o.price || 0); }, 0);
     var unpaidSum = orders.filter(function(o){ return !o.paid; }).reduce(function(s, o){ return s + (o.price || 0); }, 0);
     var avgCheck = done.length ? doneSum / done.length : 0;
