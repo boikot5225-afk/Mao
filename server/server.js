@@ -31,15 +31,22 @@ db.exec(`
     photos TEXT DEFAULT '[]',
     source TEXT DEFAULT 'manual',
     reviewed INTEGER DEFAULT 1,
+    status TEXT DEFAULT 'in_progress',
     createdAt INTEGER
   )
 `);
-// Defensive migration for databases created before source/reviewed existed.
+// Defensive migration for databases created before source/reviewed/status existed.
 for (const stmt of [
   "ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'manual'",
-  "ALTER TABLE orders ADD COLUMN reviewed INTEGER DEFAULT 1"
+  "ALTER TABLE orders ADD COLUMN reviewed INTEGER DEFAULT 1",
+  "ALTER TABLE orders ADD COLUMN status TEXT DEFAULT 'in_progress'"
 ]) {
   try { db.exec(stmt); } catch (e) { /* column already exists */ }
+}
+
+const ORDER_STATUSES = ['in_progress', 'ready', 'done'];
+function normalizeStatus(s) {
+  return ORDER_STATUSES.includes(s) ? s : 'in_progress';
 }
 
 const app = express();
@@ -153,6 +160,7 @@ function rowToOrder(row) {
     photos: JSON.parse(row.photos || '[]').map((f) => '/api/photo/' + f),
     source: row.source || 'manual',
     reviewed: !!row.reviewed,
+    status: normalizeStatus(row.status),
     createdAt: row.createdAt
   };
 }
@@ -189,8 +197,8 @@ app.post('/api/public-orders', publicRateLimit, async (req, res) => {
   const id = crypto.randomUUID();
   const photos = normalizeIncomingPhotos(b.photos);
   db.prepare(`
-    INSERT INTO orders (id, name, chat, description, price, paid, deadline, photos, source, reviewed, createdAt)
-    VALUES (?, ?, ?, ?, 0, 0, '', ?, 'customer', 0, ?)
+    INSERT INTO orders (id, name, chat, description, price, paid, deadline, photos, source, reviewed, status, createdAt)
+    VALUES (?, ?, ?, ?, 0, 0, '', ?, 'customer', 0, 'in_progress', ?)
   `).run(id, String(b.name).trim(), b.chat || '', b.desc || '', JSON.stringify(photos), Date.now());
   const order = rowToOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(id));
   notifyTelegram(order);
@@ -210,12 +218,12 @@ app.post('/api/orders', (req, res) => {
   const id = crypto.randomUUID();
   const photos = normalizeIncomingPhotos(b.photos);
   db.prepare(`
-    INSERT INTO orders (id, name, chat, description, price, paid, deadline, photos, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO orders (id, name, chat, description, price, paid, deadline, photos, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, String(b.name).trim(), b.chat || '', b.desc || '',
     Number(b.price) || 0, b.paid ? 1 : 0, b.deadline || '',
-    JSON.stringify(photos), Date.now()
+    JSON.stringify(photos), normalizeStatus(b.status), Date.now()
   );
   res.json(rowToOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(id)));
 });
@@ -233,12 +241,12 @@ app.put('/api/orders/:id', (req, res) => {
     .forEach((f) => fs.unlink(path.join(UPLOADS_DIR, f), () => {}));
 
   db.prepare(`
-    UPDATE orders SET name=?, chat=?, description=?, price=?, paid=?, deadline=?, photos=?, reviewed=1
+    UPDATE orders SET name=?, chat=?, description=?, price=?, paid=?, deadline=?, photos=?, status=?, reviewed=1
     WHERE id = ?
   `).run(
     String(b.name).trim(), b.chat || '', b.desc || '',
     Number(b.price) || 0, b.paid ? 1 : 0, b.deadline || '',
-    JSON.stringify(newPhotos), req.params.id
+    JSON.stringify(newPhotos), normalizeStatus(b.status), req.params.id
   );
   res.json(rowToOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)));
 });

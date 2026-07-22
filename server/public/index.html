@@ -81,6 +81,9 @@
   .badge.deadline-urgent { background: var(--amber-bg); color: var(--amber); }
   .badge.deadline-overdue { background: var(--red-bg); color: var(--red); }
   .badge.new-request { background: #e9e5fb; color: #5b3fd1; }
+  .badge.status-in_progress { background: #eef1f6; color: #55606e; cursor: pointer; }
+  .badge.status-ready { background: var(--amber-bg); color: var(--amber); cursor: pointer; }
+  .badge.status-done { background: var(--green-bg); color: var(--green); cursor: pointer; }
 
   .order-desc { font-size: 13px; color: var(--text2); white-space: pre-wrap; }
 
@@ -176,6 +179,7 @@
       <button class="filter-btn" data-filter="new_requests">Новые заявки</button>
       <button class="filter-btn" data-filter="unpaid">Не оплачено</button>
       <button class="filter-btn" data-filter="urgent">Горящие</button>
+      <button class="filter-btn" data-filter="ready">Готово к выдаче</button>
     </div>
   </div>
 
@@ -285,6 +289,9 @@
     var dl = daysLeft(order.deadline);
     return dl !== null && dl <= 2;
   }
+
+  var STATUS_CYCLE = ['in_progress', 'ready', 'done'];
+  var STATUS_LABELS = { in_progress: 'В работе', ready: 'Готово', done: 'Отдано' };
 
   function resizeImage(file, callback) {
     var reader = new FileReader();
@@ -431,10 +438,13 @@
       if (filter === 'unpaid' && o.paid) return false;
       if (filter === 'urgent' && !isUrgentOrOverdue(o)) return false;
       if (filter === 'new_requests' && o.reviewed) return false;
+      if (filter === 'ready' && o.status !== 'ready') return false;
       return true;
     });
 
     visible.sort(function(a, b) {
+      var doneA = a.status === 'done' ? 1 : 0, doneB = b.status === 'done' ? 1 : 0;
+      if (doneA !== doneB) return doneA - doneB;
       var da = daysLeft(a.deadline), db = daysLeft(b.deadline);
       if (da === null && db === null) return b.createdAt - a.createdAt;
       if (da === null) return 1;
@@ -470,6 +480,7 @@
 
       var badgesHtml = '';
       if (!o.reviewed) badgesHtml += '<span class="badge new-request">Новая заявка</span>';
+      badgesHtml += '<span class="badge status-' + o.status + '" data-cycle-status="' + o.id + '">' + STATUS_LABELS[o.status] + '</span>';
       badgesHtml += '<span class="badge ' + (o.paid ? 'paid' : 'unpaid') + '" data-toggle-paid="' + o.id + '">' + (o.paid ? 'Оплачено' : 'Не оплачено') + '</span>';
       if (badge) badgesHtml += '<span class="badge ' + badge.cls + '">' + badge.text + '</span>';
 
@@ -499,8 +510,10 @@
     var unpaidCount = orders.filter(function(o){ return !o.paid; }).length;
     var urgentCount = orders.filter(isUrgentOrOverdue).length;
     var newCount = orders.filter(function(o){ return !o.reviewed; }).length;
+    var readyCount = orders.filter(function(o){ return o.status === 'ready'; }).length;
     document.getElementById('stats').textContent =
-      'Всего: ' + orders.length + ' · Новых заявок: ' + newCount + ' · Не оплачено: ' + unpaidCount + ' · Горит: ' + urgentCount;
+      'Всего: ' + orders.length + ' · Новых заявок: ' + newCount + ' · Не оплачено: ' + unpaidCount +
+      ' · Горит: ' + urgentCount + ' · Готово к выдаче: ' + readyCount;
   }
 
   function escapeHtml(s) {
@@ -553,6 +566,26 @@
           render();
         } catch (err) {
           showToast('Не удалось изменить статус оплаты');
+        }
+      }
+      return;
+    }
+    var cycle = e.target.closest('[data-cycle-status]');
+    if (cycle) {
+      var id3 = cycle.getAttribute('data-cycle-status');
+      var order3 = orders.find(function(o){ return o.id === id3; });
+      if (order3) {
+        var nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(order3.status) + 1) % STATUS_CYCLE.length];
+        try {
+          var updated3 = await api('/api/orders/' + id3, {
+            method: 'PUT',
+            body: JSON.stringify(Object.assign({}, order3, { status: nextStatus }))
+          });
+          var idx3 = orders.findIndex(function(o){ return o.id === id3; });
+          orders[idx3] = updated3;
+          render();
+        } catch (err) {
+          showToast('Не удалось изменить статус выполнения');
         }
       }
     }
