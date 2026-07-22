@@ -39,9 +39,10 @@
   header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
   .header-left h1 { font-size: 22px; font-weight: 700; }
   #stats { font-size: 13px; color: var(--text2); }
-  #logout-btn {
+  #logout-btn, #analytics-btn {
     font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm);
     border: 1px solid var(--border); background: var(--card); color: var(--text2);
+    text-decoration: none; display: inline-block;
   }
 
   #toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
@@ -169,7 +170,10 @@
       <h1>Заказы</h1>
       <div id="stats"></div>
     </div>
-    <button id="logout-btn">Выйти</button>
+    <div style="display:flex; gap:8px;">
+      <a id="analytics-btn" href="/analytics.html">Аналитика</a>
+      <button id="logout-btn">Выйти</button>
+    </div>
   </header>
 
   <div id="toolbar">

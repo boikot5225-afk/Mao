@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Аналитика — Заказы</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #fbf8f6; --card: #ffffff; --text: #2c2422; --text2: #7a6f6b; --text3: #a89e9a;
+    --border: rgba(44,36,34,0.1); --accent: #b8865f; --accent-dark: #93694a;
+    --green: #2e8b57; --green-bg: #e7f4ec; --amber: #b8860b; --amber-bg: #fdf3d9;
+    --red: #c0392b; --red-bg: #fbe7e4; --radius: 12px; --radius-sm: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+
+  #app { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 22px; font-weight: 700; }
+  #back-btn {
+    font-size: 13px; padding: 7px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--card); color: var(--text2); text-decoration: none;
+  }
+
+  h2 { font-size: 15px; font-weight: 700; color: var(--text2); margin: 26px 0 10px; }
+  h2:first-of-type { margin-top: 0; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-tile {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-tile .value { font-size: 22px; font-weight: 700; }
+  .stat-tile .label { font-size: 12px; color: var(--text2); }
+  .stat-tile.accent .value { color: var(--green); }
+  .stat-tile.warn .value { color: var(--red); }
+
+  #repeat-list { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .repeat-row {
+    display: flex; justify-content: space-between; padding: 11px 14px; font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .repeat-row:last-child { border-bottom: none; }
+  .repeat-row .count { color: var(--text2); font-size: 13px; }
+  #repeat-empty { padding: 20px 14px; color: var(--text3); font-size: 14px; }
+
+  #loading { text-align: center; padding: 60px 16px; color: var(--text3); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Аналитика</h1>
+    <a id="back-btn" href="/">← К заказам</a>
+  </header>
+
+  <div id="loading">Загрузка...</div>
+  <div id="content" style="display:none">
+
+    <h2>Всего выполнено</h2>
+    <div class="stat-grid">
+      <div class="stat-tile">
+        <div class="value" id="done-count">0</div>
+        <div class="label">Выполнено заказов</div>
+      </div>
+      <div class="stat-tile accent">
+        <div class="value" id="done-sum">0 ₽</div>
+        <div class="label">Сумма выполненных</div>
+      </div>
+      <div class="stat-tile">
+        <div class="value" id="avg-check">0 ₽</div>
+        <div class="label">Средний чек</div>
+      </div>
+      <div class="stat-tile warn">
+        <div class="value" id="unpaid-sum">0 ₽</div>
+        <div class="label">Должны оплатить</div>
+      </div>
+    </div>
+
+    <h2 id="month-title">За этот месяц</h2>
+    <div class="stat-grid">
+      <div class="stat-tile">
+        <div class="value" id="month-count">0</div>
+        <div class="label">Выполнено заказов</div>
+      </div>
+      <div class="stat-tile accent">
+        <div class="value" id="month-sum">0 ₽</div>
+        <div class="label">Сумма выполненных</div>
+      </div>
+    </div>
+
+    <h2>Повторные клиенты</h2>
+    <div id="repeat-list"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function fmt(n) {
+    return Math.round(n).toLocaleString('ru-RU') + ' ₽';
+  }
+
+  async function loadOrders() {
+    var res = await fetch('/api/orders');
+    if (res.status === 401) { location.href = '/login.html'; throw new Error('unauthorized'); }
+    if (!res.ok) throw new Error('request failed');
+    return res.json();
+  }
+
+  function isSameMonth(ts, ref) {
+    var d = new Date(ts);
+    return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+  }
+
+  (async function init() {
+    var orders;
+    try {
+      orders = await loadOrders();
+    } catch (err) {
+      if (err.message !== 'unauthorized') {
+        document.getElementById('loading').textContent = 'Не удалось загрузить данные.';
+      }
+      return;
+    }
+
+    var done = orders.filter(function(o){ return o.status === 'done'; });
+    var doneSum = done.reduce(function(s, o){ return s + (o.price || 0); }, 0);
+    var unpaidSum = orders.filter(function(o){ return !o.paid; }).reduce(function(s, o){ return s + (o.price || 0); }, 0);
+    var avgCheck = done.length ? doneSum / done.length : 0;
+
+    document.getElementById('done-count').textContent = done.length;
+    document.getElementById('done-sum').textContent = fmt(doneSum);
+    document.getElementById('avg-check').textContent = fmt(avgCheck);
+    document.getElementById('unpaid-sum').textContent = fmt(unpaidSum);
+
+    var now = new Date();
+    var monthNames = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    document.getElementById('month-title').textContent = 'За ' + monthNames[now.getMonth()] + ' ' + now.getFullYear();
+    var doneThisMonth = done.filter(function(o){ return isSameMonth(o.createdAt, now); });
+    var monthSum = doneThisMonth.reduce(function(s, o){ return s + (o.price || 0); }, 0);
+    document.getElementById('month-count').textContent = doneThisMonth.length;
+    document.getElementById('month-sum').textContent = fmt(monthSum);
+
+    var byName = {};
+    orders.forEach(function(o) {
+      var key = (o.name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!byName[key]) byName[key] = { name: o.name.trim(), count: 0 };
+      byName[key].count++;
+    });
+    var repeats = Object.values(byName).filter(function(r){ return r.count > 1; })
+      .sort(function(a, b){ return b.count - a.count; });
+
+    var listEl = document.getElementById('repeat-list');
+    if (!repeats.length) {
+      listEl.innerHTML = '<div id="repeat-empty">Повторных клиентов пока нет.</div>';
+    } else {
+      listEl.innerHTML = repeats.map(function(r) {
+        return '<div class="repeat-row"><span>' + escapeHtml(r.name) + '</span><span class="count">' + r.count + ' заказ(а/ов)</span></div>';
+      }).join('');
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  })();
+
+  function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>
